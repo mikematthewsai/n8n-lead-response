@@ -1,0 +1,357 @@
+{
+  "name": "Morning Brief",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 7,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "380228db-2d3c-4622-a7c5-5e43564e7db9",
+      "name": "Every morning",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c546aba2-2b9d-4b2c-8263-11855ab433fa",
+      "name": "Load config",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -500,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "b3fcd26c-9671-465b-9554-bb4267afad01",
+      "name": "Contacts",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "1e5e0982-ea6e-46bc-9c97-75387c309602",
+      "name": "Cadences",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -140,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "messages"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c75e61cb-12c5-4a7f-9966-46503e0ef904",
+      "name": "Messages",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        40,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "reviews"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "9430eb57-fff7-4c91-8b0d-88cf44d06944",
+      "name": "Reviews",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Load config').first().json || {};\nconst tz = cfg.timezone || 'America/New_York';\nconst now = DateTime.now().setZone(tz);\n\nconst num = (v, dflt) => {\n  if (v === null || v === undefined || String(v).trim() === '') return dflt;\n  const n = Number(v);\n  return Number.isFinite(n) && n >= 0 ? n : dflt;\n};\n\n// How far back the brief looks. 24 hours by default, so a 7am run covers 7am yesterday on.\nconst hours = num(cfg.brief_lookback_hours, 24);\nconst since = now.minus({ hours });\n\n// Every data table row carries createdAt, which is what the windows below are built on.\n// Nothing here depends on a column an owner has to remember to fill in.\nconst rows = (name) => {\n  try { return $(name).all().map(i => i.json).filter(r => r && r.id !== undefined); }\n  catch (e) { return []; }\n};\nconst inWindow = (r, field) => {\n  const v = r && r[field];\n  if (!v) return false;\n  const d = DateTime.fromISO(String(v));\n  return d.isValid && d >= since;\n};\n\nconst contacts = rows('Contacts');\nconst cadences = rows('Cadences');\nconst messages = rows('Messages');\nconst reviews  = rows('Reviews');\n\nconst newContacts = contacts.filter(r => inWindow(r, 'createdAt'));\n\nconst recentMsgs = messages.filter(r => inWindow(r, 'createdAt'));\nconst inbound = recentMsgs.filter(r => r.direction === 'in');\nconst outbound = recentMsgs.filter(r => r.direction === 'out');\nconst inboundNumbers = [...new Set(inbound.map(r => r.phone).filter(Boolean))];\n\n// Waiting on you: the newest message on that number came in, not out. This is the number\n// that actually costs money, so it goes near the top and names the numbers.\nconst newest = {};\nfor (const m of messages) {\n  const t = DateTime.fromISO(String(m.createdAt || ''));\n  if (!t.isValid || !m.phone) continue;\n  if (!newest[m.phone] || t > newest[m.phone].t) newest[m.phone] = { t, direction: m.direction };\n}\nconst waiting = Object.keys(newest).filter(p => newest[p].direction === 'in');\n\nconst activeNow = cadences.filter(r => r.status === 'active');\nconst startedToday = cadences.filter(r => inWindow(r, 'createdAt'));\nconst stoppedToday = cadences.filter(r => r.stopped_at && inWindow(r, 'stopped_at'));\nconst stoppedBy = {};\nfor (const r of stoppedToday) stoppedBy[r.status] = (stoppedBy[r.status] || 0) + 1;\n\nconst asked = reviews.filter(r => inWindow(r, 'createdAt'));\nconst scored = reviews.filter(r => r.replied_at && inWindow(r, 'replied_at') && r.score !== null && r.score !== undefined);\nconst lowMark = num(cfg.review_low_score, 4);\nconst lows = scored.filter(r => Number(r.score) < lowMark);\n\nconst pretty = (p) => String(p || '').replace(/^\\+1(\\d{3})(\\d{3})(\\d{4})$/, '($1) $2-$3');\nconst plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);\n\nconst owner = cfg.owner_name || 'there';\nconst lines = [];\n\nif (waiting.length) {\n  lines.push(plural(waiting.length, 'conversation is', 'conversations are') + ' waiting on you: ' +\n             waiting.slice(0, 3).map(pretty).join(', ') + (waiting.length > 3 ? ' and more' : ''));\n}\nif (newContacts.length) lines.push(plural(newContacts.length, 'new contact', 'new contacts'));\nif (inbound.length) lines.push(plural(inbound.length, 'text in', 'texts in') + ' from ' + plural(inboundNumbers.length, 'number', 'numbers'));\nif (outbound.length) lines.push(plural(outbound.length, 'text', 'texts') + ' sent');\nif (startedToday.length) lines.push(plural(startedToday.length, 'follow up started', 'follow ups started'));\nif (Object.keys(stoppedBy).length) {\n  lines.push('closed: ' + Object.keys(stoppedBy).map(k => stoppedBy[k] + ' ' + k.replace(/_/g, ' ')).join(', '));\n}\nif (activeNow.length) lines.push(plural(activeNow.length, 'follow up', 'follow ups') + ' still running');\nif (asked.length) lines.push(plural(asked.length, 'review ask', 'review asks') + ' went out');\nif (scored.length) {\n  const avg = (scored.reduce((s, r) => s + Number(r.score), 0) / scored.length);\n  lines.push(plural(scored.length, 'review score', 'review scores') + ' back, average ' + (Math.round(avg * 10) / 10));\n}\nif (lows.length) lines.push(plural(lows.length, 'low score', 'low scores') + ' to look at: ' + lows.slice(0, 3).map(r => pretty(r.phone)).join(', '));\n\nconst quiet = lines.length === 0;\nconst header = 'Morning ' + owner + '. Last ' + hours + ' hours:';\nconst body = quiet\n  ? 'Morning ' + owner + '. Quiet ' + hours + ' hours, nothing came in and nothing is waiting on you.'\n  : header + ' ' + lines.join('. ') + '.';\n\n// An owner who only wants a text when something happened sets brief_skip_if_empty to yes.\nconst skipEmpty = ['yes', 'true', '1', 'on'].includes(String(cfg.brief_skip_if_empty || '').trim().toLowerCase());\n\nreturn [{ json: {\n  send: !(quiet && skipEmpty),\n  quiet,\n  body,\n  counts: {\n    waiting: waiting.length, new_contacts: newContacts.length,\n    inbound: inbound.length, outbound: outbound.length,\n    cadences_started: startedToday.length, cadences_active: activeNow.length,\n    review_asks: asked.length, review_scores: scored.length, low_scores: lows.length\n  }\n} }];\n"
+      },
+      "id": "72308673-aa4c-4eac-8edb-bc8ba73d93a8",
+      "name": "Build the brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d8b15a09-8600-4add-97d9-ebcbaade77d3",
+              "leftValue": "={{ $json.send === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "474ef869-d493-46bc-aed1-02bb533a7e4f",
+      "name": "Worth sending?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_ALERT__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "morning_brief",
+            "text": "={{ $('Build the brief').first().json.body }}",
+            "urgency": "normal",
+            "phone": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "a195d3cc-f916-464f-8e2b-1933dfc000c5",
+      "name": "Send the brief",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        760,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Every morning": {
+      "main": [
+        [
+          {
+            "node": "Load config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load config": {
+      "main": [
+        [
+          {
+            "node": "Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contacts": {
+      "main": [
+        [
+          {
+            "node": "Cadences",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadences": {
+      "main": [
+        [
+          {
+            "node": "Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Messages": {
+      "main": [
+        [
+          {
+            "node": "Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reviews": {
+      "main": [
+        [
+          {
+            "node": "Build the brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build the brief": {
+      "main": [
+        [
+          {
+            "node": "Worth sending?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Worth sending?": {
+      "main": [
+        [
+          {
+            "node": "Send the brief",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}
