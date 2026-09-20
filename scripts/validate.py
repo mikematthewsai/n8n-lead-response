@@ -70,6 +70,39 @@ def check_structure(files):
     ok(f"{len(files)} workflow files parse, with unique node names and no orphan connections")
 
 
+def check_datatable_filters(files):
+    """A data table filter that n8n will not accept.
+
+    n8n only understands matchType 'allConditions' or 'anyCondition', and every
+    condition needs a comparison operator. An invalid matchType does not fail
+    loudly: n8n imports the node, silently drops the condition operators, and the
+    node throws 'unexpected match type' at runtime, after the webhook has already
+    answered 200. That happened to all 20 filtered nodes in Quote Chaser and
+    Invoice Nudge on 2026-09-20.
+    """
+    valid = {"allConditions", "anyCondition"}
+    bad = 0
+    for f, wf in files:
+        rel = f.relative_to(ROOT)
+        for node in wf.get("nodes", []):
+            if node.get("type") != "n8n-nodes-base.dataTable":
+                continue
+            params = node.get("parameters", {})
+            conditions = (params.get("filters") or {}).get("conditions") or []
+            if not conditions:
+                continue
+            mt = params.get("matchType")
+            if mt not in valid:
+                fail(f"{rel} node '{node.get('name')}' has matchType {mt!r}; n8n accepts only {sorted(valid)}")
+                bad += 1
+            for i, c in enumerate(conditions):
+                if not c.get("condition"):
+                    fail(f"{rel} node '{node.get('name')}' filter {i} has no comparison operator")
+                    bad += 1
+    if not bad:
+        ok("every data table filter uses a match type n8n accepts, with an operator on each condition")
+
+
 def readme_node_counts():
     """Rows shaped: | 3 | Core 1: Send SMS | 16 | description |"""
     counts = {}
@@ -195,6 +228,7 @@ def main():
     if files:
         check_structure(files)
         check_node_counts(files)
+        check_datatable_filters(files)
         check_tables(files)
         check_placeholders(files)
     check_secrets()

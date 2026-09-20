@@ -111,7 +111,7 @@
           "value": "contacts"
         },
         "returnAll": true,
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -269,7 +269,7 @@
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -608,7 +608,7 @@
           "value": "cadences"
         },
         "returnAll": true,
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -833,7 +833,7 @@
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -878,7 +878,7 @@
           "value": "cadences"
         },
         "returnAll": true,
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -1103,7 +1103,7 @@
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -1148,7 +1148,7 @@
           "value": "cadences"
         },
         "returnAll": true,
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -1373,7 +1373,7 @@
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
@@ -1484,7 +1484,7 @@
           "attemptToConvertTypes": false,
           "convertFieldsToString": false
         },
-        "matchType": "allFilters",
+        "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
