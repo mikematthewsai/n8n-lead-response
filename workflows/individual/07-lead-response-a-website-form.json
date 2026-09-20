@@ -1,0 +1,154 @@
+{
+  "name": "Lead Response A: Website form",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead",
+        "responseMode": "onReceived",
+        "options": {
+          "responseData": "{\"ok\":true}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "4ac62ccb-d3d0-4f96-9491-7189af3894d5",
+      "name": "Form webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "2fab83ec-de94-426a-8c49-09fafe33721a"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst b = $json.body || {};\nconst raw = String(b.phone || b.Phone || b.mobile || '');\nconst d = raw.replace(/\\D/g, '');\nlet phone = '';\nif (d.length === 10) phone = '+1' + d;\nelse if (d.length === 11 && d.startsWith('1')) phone = '+' + d;\nelse if (d.length > 11) phone = '+' + d;\nif (!phone) throw new Error('Lead has no usable phone number: ' + JSON.stringify(b));\nreturn [{ json: {\n  phone,\n  name: String(b.name || b.Name || ((b.first_name || '') + ' ' + (b.last_name || '')).trim() || ''),\n  source: String(b.source || 'website_form'),\n  message: String(b.message || b.Message || b.notes || '') + (b.address ? ' Address: ' + b.address : '')\n} }];\n"
+      },
+      "id": "e8783438-44ed-4bcb-93b2-3fbfd93e62f0",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_PIPELINE__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $json.phone }}",
+            "name": "={{ $json.name }}",
+            "source": "={{ $json.source }}",
+            "message": "={{ $json.message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "466f7f74-35e7-4c94-a91a-fa27b58826a4",
+      "name": "Start Lead Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        440,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Form webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Start Lead Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}

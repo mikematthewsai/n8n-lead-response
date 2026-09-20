@@ -1,0 +1,474 @@
+{
+  "name": "Lead Response B: Phone line",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-in",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e0f6ac9a-44fb-427e-a041-26191ad95db4",
+      "name": "Voice webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "2c3c4f5d-4174-4702-9356-95e5d594f4be"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "bd7efd58-eebc-48a4-a1de-07ebcc9c3552",
+      "name": "Load config",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ '<Response><Dial timeout=\"20\" action=\"https://__N8N_HOST__/webhook/voice-status\" method=\"POST\">' + $json.owner_cell + '</Dial></Response>' }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b54517b3-d906-4903-bc04-df42c1325370",
+      "name": "Ring the owner",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "deb24345-7207-42db-98a5-5d794999fe2d",
+      "name": "Status webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "4e45daf3-56f1-4da5-b9d3-7fd756091b8c"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "01f6720f-bf29-4cfc-9b0f-a401cd16112b",
+              "leftValue": "={{ ['no-answer','busy','failed','canceled'].includes($json.body.DialCallStatus) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "4ab7c5f0-ca46-4f3f-8130-5711099d9ace",
+      "name": "Missed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<Response><Say>Sorry we missed you. We are texting you right now.</Say><Hangup/></Response>",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      },
+      "id": "bde3fb9c-31d2-473f-baea-fb1ec9ad46ee",
+      "name": "Say sorry and hang up",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst b = $('Status webhook').first().json.body || {};\nreturn [{ json: { phone: String(b.From || ''), name: '', source: 'missed_call', message: 'Missed call on the business line' } }];\n"
+      },
+      "id": "bc4fc864-6de7-438b-9307-25e5c277cf2d",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_PIPELINE__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $json.phone }}",
+            "name": "={{ $json.name }}",
+            "source": "={{ $json.source }}",
+            "message": "={{ $json.message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "fdff0b23-7346-41eb-b767-72805f993db6",
+      "name": "Start Lead Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<Response></Response>",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      },
+      "id": "deaadee2-c524-464f-873e-c00bdc2ddb15",
+      "name": "End call",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bridge-connect",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "12d9295c-c489-4adb-a36c-4a2b045a4afc",
+      "name": "Bridge webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        640
+      ],
+      "webhookId": "772dee41-3e09-44d7-9384-2d099e992642"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a66e1cc8-e2b0-4e42-8dbc-61ba694f6b26",
+              "leftValue": "={{ String($json.body.Digits || '') === '1' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f96a7915-d56b-4630-ade2-25156290b659",
+      "name": "Pressed 1?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        220,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ '<Response><Say>Connecting you now.</Say><Dial callerId=\"' + $json.query.from + '\">' + $json.query.to + '</Dial></Response>' }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      },
+      "id": "19876718-8f0f-4854-8e06-5f86f6739159",
+      "name": "Connect the customer",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<Response><Say>Okay, goodbye.</Say><Hangup/></Response>",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      },
+      "id": "89d13427-1a40-403a-95d6-f9de7aa16a0a",
+      "name": "Hang up",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        740
+      ]
+    }
+  ],
+  "connections": {
+    "Voice webhook": {
+      "main": [
+        [
+          {
+            "node": "Load config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load config": {
+      "main": [
+        [
+          {
+            "node": "Ring the owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status webhook": {
+      "main": [
+        [
+          {
+            "node": "Missed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Missed?": {
+      "main": [
+        [
+          {
+            "node": "Say sorry and hang up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "End call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Say sorry and hang up": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Start Lead Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bridge webhook": {
+      "main": [
+        [
+          {
+            "node": "Pressed 1?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pressed 1?": {
+      "main": [
+        [
+          {
+            "node": "Connect the customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hang up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}

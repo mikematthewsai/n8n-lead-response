@@ -1,0 +1,176 @@
+{
+  "name": "Core 0: Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "63fbb8c5-0bc8-4e5c-8f85-8a0d799001b8",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "a791a015-24b4-4677-ad2a-f676ad542261",
+      "name": "Load config",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b46e335d-a856-4b42-bf9c-d1ff4c394ef5",
+              "name": "text",
+              "value": "={{ 'n8n error in ' + $('Error Trigger').first().json.workflow.name + ': ' + ($('Error Trigger').first().json.execution.error.message || 'unknown error') + ' (node ' + ($('Error Trigger').first().json.execution.lastNodeExecuted || '?') + '). ' + ($('Error Trigger').first().json.execution.url || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "04ab32a3-a44f-4edb-b916-08420c421e80",
+              "name": "subject",
+              "value": "={{ 'n8n error: ' + $('Error Trigger').first().json.workflow.name }}",
+              "type": "string"
+            },
+            {
+              "id": "50fdece5-33cf-4411-9a48-1400cb584f11",
+              "name": "from",
+              "value": "={{ $json.business_number }}",
+              "type": "string"
+            },
+            {
+              "id": "2a2466ef-adea-45b4-a1c2-e1c48bc0ee7d",
+              "name": "detail",
+              "value": "={{ JSON.stringify($('Error Trigger').first().json, null, 2) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "4f2dac3c-49ca-4a27-9f37-5d684230c6d7",
+      "name": "Shape the alert",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $json.from }}",
+        "to": "__OWNER_CELL__",
+        "message": "={{ $json.text }}",
+        "toWhatsapp": false,
+        "options": {}
+      },
+      "id": "15bba809-77bd-4e40-9271-34d76677e7c9",
+      "name": "Text Mike",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "__OWNER_EMAIL__",
+        "subject": "={{ $('Shape the alert').first().json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Shape the alert').first().json.text + '\\n\\n' + $('Shape the alert').first().json.detail }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b42d9c87-3357-4a88-b480-19a3ec3f878b",
+      "name": "Email Mike",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load config": {
+      "main": [
+        [
+          {
+            "node": "Shape the alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape the alert": {
+      "main": [
+        [
+          {
+            "node": "Text Mike",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Mike": {
+      "main": [
+        [
+          {
+            "node": "Email Mike",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "active": false,
+  "pinData": {}
+}

@@ -1,0 +1,424 @@
+{
+  "name": "Core 3: Owner Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "event",
+              "type": "string"
+            },
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "urgency",
+              "type": "string"
+            },
+            {
+              "name": "phone",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "7bc0e6eb-a9bb-486a-9f43-a8a929516816",
+      "name": "When called",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "9e35fa5e-0e91-486f-94f5-a94a9ae55dd7",
+      "name": "Load config",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Load config').first().json;\nconst input = $('When called').first().json;\nconst ch = String(cfg.alert_channel || 'sms').toLowerCase();\nconst high = String(input.urgency || '').toLowerCase() === 'high';\nconst words = { new_lead: 'New lead', missed_call: 'Missed call', reply: 'Customer reply', cadence_done: 'Follow-up finished', error: 'Error', duplicate: 'Same lead again' };\nreturn [{ json: {\n  send_sms: ch === 'sms' || ch === 'both',\n  send_email: ch === 'email' || ch === 'both',\n  sms_text: (high ? 'NEW LEAD: ' : '') + String(input.text || ''),\n  subject: (words[input.event] || input.event || 'Alert') + ' - ' + (cfg.business_name || ''),\n  email_text: String(input.text || '') + (input.phone ? '\\n\\nContact: ' + input.phone : ''),\n  from: cfg.business_number, owner_cell: cfg.owner_cell, owner_email: cfg.owner_email,\n  event: input.event, phone: input.phone\n} }];\n"
+      },
+      "id": "24bb57d6-3002-46e4-ab94-0ed0ac1d5b7e",
+      "name": "Plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "75ab3880-8826-4d6e-9676-bbe477c318ba",
+              "leftValue": "={{ $json.send_sms === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "4a962882-3092-40c6-b2ce-417db6536376",
+      "name": "Text the owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $('Plan').first().json.from }}",
+        "to": "={{ $('Plan').first().json.owner_cell }}",
+        "message": "={{ $('Plan').first().json.sms_text }}",
+        "toWhatsapp": false,
+        "options": {}
+      },
+      "id": "56c0b169-a185-47f3-a581-ed62d1f94a13",
+      "name": "Text owner",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -160
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "messages"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Plan').first().json.owner_cell }}",
+            "direction": "out",
+            "body": "={{ $('Plan').first().json.sms_text }}",
+            "kind": "owner_forward",
+            "twilio_sid": "={{ $json.sid || '' }}",
+            "status": "={{ $json.error ? 'failed' : $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direction",
+              "displayName": "direction",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "twilio_sid",
+              "displayName": "twilio_sid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4f422300-7702-408b-b9ff-3b6f9703b1b5",
+      "name": "Log owner text",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "38da3d76-f8c2-4392-9be5-b091da5b8a01",
+              "leftValue": "={{ $('Plan').first().json.send_email === true || (() => { try { return !!$('Text owner').first().json.error; } catch (e) { return false; } })() }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "7e523c0b-5443-4afd-9d07-2b820b31fb63",
+      "name": "Email the owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $('Plan').first().json.owner_email }}",
+        "subject": "={{ $('Plan').first().json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Plan').first().json.email_text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "57e7c4f2-2a29-4b7a-8c03-9b47247863eb",
+      "name": "Email owner",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        -160
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "52566416-3101-4ef0-b679-efa825bcee06",
+              "name": "ok",
+              "value": "={{ true }}",
+              "type": "boolean"
+            },
+            {
+              "id": "9b0cc173-8dc1-4f21-aa3a-73aff5b52dfd",
+              "name": "event",
+              "value": "={{ $('Plan').first().json.event }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "44ddf78c-2e1a-48b5-9dac-0d8db1592557",
+      "name": "Done",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1760,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "When called": {
+      "main": [
+        [
+          {
+            "node": "Load config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load config": {
+      "main": [
+        [
+          {
+            "node": "Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Plan": {
+      "main": [
+        [
+          {
+            "node": "Text the owner?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text the owner?": {
+      "main": [
+        [
+          {
+            "node": "Text owner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email the owner?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text owner": {
+      "main": [
+        [
+          {
+            "node": "Log owner text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log owner text": {
+      "main": [
+        [
+          {
+            "node": "Email the owner?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email the owner?": {
+      "main": [
+        [
+          {
+            "node": "Email owner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email owner": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}

@@ -1,0 +1,977 @@
+{
+  "name": "Setup: tables and settings",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "73b2c713-6ed6-4e64-9581-c67425bf4ad7",
+      "name": "Run this once",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "09b1a91c-81ea-4a46-8148-535d63a4ad1b",
+              "name": "business_name",
+              "value": "Matthews Automation",
+              "type": "string"
+            },
+            {
+              "id": "f953db00-e81b-4c49-ad66-b9b6a176a2f2",
+              "name": "timezone",
+              "value": "America/New_York",
+              "type": "string"
+            },
+            {
+              "id": "0a8ef184-59e3-4030-a33b-1b83383c2228",
+              "name": "quiet_start",
+              "value": "20:00",
+              "type": "string"
+            },
+            {
+              "id": "ba59843b-b29d-404c-91c4-f5c7dac49d5d",
+              "name": "quiet_end",
+              "value": "08:00",
+              "type": "string"
+            },
+            {
+              "id": "423e6ee6-18cb-4b29-8a27-fafb3594ef4a",
+              "name": "owner_name",
+              "value": "Mike",
+              "type": "string"
+            },
+            {
+              "id": "1d277095-e535-41c6-9564-8e022ece4f61",
+              "name": "owner_cell",
+              "value": "__OWNER_CELL__",
+              "type": "string"
+            },
+            {
+              "id": "46e36966-463f-430f-bd78-0aa1b8003d47",
+              "name": "business_number",
+              "value": "__BUSINESS_NUMBER__",
+              "type": "string"
+            },
+            {
+              "id": "26169fa3-1c2b-4780-b1d4-f36e1fe3099f",
+              "name": "alert_channel",
+              "value": "sms",
+              "type": "string"
+            },
+            {
+              "id": "fcc3db93-39be-472d-aceb-7b17c3569bb2",
+              "name": "owner_email",
+              "value": "__OWNER_EMAIL__",
+              "type": "string"
+            },
+            {
+              "id": "bef7279b-4435-4171-9b29-015f8bc5d574",
+              "name": "review_link",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "89344555-d5b3-4bf0-b987-35b669b2ef77",
+              "name": "lead_instant_text",
+              "value": "This is {business_name}, sorry we missed you. What's going on and what's the address? Reply here and we'll get you sorted.",
+              "type": "string"
+            },
+            {
+              "id": "6bf7a29f-043b-4833-a0a5-29265dc7da8e",
+              "name": "lead_nudge_1_text",
+              "value": "Still here if you need us. What's the address and when works for you?",
+              "type": "string"
+            },
+            {
+              "id": "dd1cdb3d-5646-43e2-9b69-74418625357b",
+              "name": "lead_nudge_2_text",
+              "value": "Wanted to make sure you got taken care of. If you booked someone else, no problem, just let us know.",
+              "type": "string"
+            },
+            {
+              "id": "c02c20e5-94be-4b82-be97-07cd050d4dcb",
+              "name": "lead_nudge_3_text",
+              "value": "Last note from us. If the problem's still open, reply here and we'll fit you in.",
+              "type": "string"
+            },
+            {
+              "id": "fd187471-49a2-4def-8ec3-875d9c3e5f62",
+              "name": "bridge_whisper",
+              "value": "New lead from {source}, {name}. Press 1 to connect.",
+              "type": "string"
+            },
+            {
+              "id": "adc157fa-2f86-4223-a4cb-f66303d764d9",
+              "name": "stop_footer",
+              "value": "Reply STOP to opt out.",
+              "type": "string"
+            },
+            {
+              "id": "9c78514c-7410-4b2f-9cd9-f0df45b17b95",
+              "name": "help_text",
+              "value": "{business_name}. Reply STOP to opt out. Call us at {business_number_pretty}.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "45e8c85f-27eb-4351-a6ab-b5e0c5636a11",
+      "name": "Your business settings (edit me)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "contacts",
+        "columns": {
+          "column": [
+            {
+              "name": "phone",
+              "type": "string"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "type": "string"
+            },
+            {
+              "name": "consent",
+              "type": "string"
+            },
+            {
+              "name": "stage",
+              "type": "string"
+            },
+            {
+              "name": "last_inbound_at",
+              "type": "date"
+            },
+            {
+              "name": "last_outbound_at",
+              "type": "date"
+            },
+            {
+              "name": "notes",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "ed8c1dff-774b-489f-86a2-46088df13f26",
+      "name": "Create contacts table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "messages",
+        "columns": {
+          "column": [
+            {
+              "name": "phone",
+              "type": "string"
+            },
+            {
+              "name": "direction",
+              "type": "string"
+            },
+            {
+              "name": "body",
+              "type": "string"
+            },
+            {
+              "name": "kind",
+              "type": "string"
+            },
+            {
+              "name": "twilio_sid",
+              "type": "string"
+            },
+            {
+              "name": "status",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "7fd25b36-2983-43cc-97ff-5e423b4d2b72",
+      "name": "Create messages table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "cadences",
+        "columns": {
+          "column": [
+            {
+              "name": "phone",
+              "type": "string"
+            },
+            {
+              "name": "workflow",
+              "type": "string"
+            },
+            {
+              "name": "step",
+              "type": "number"
+            },
+            {
+              "name": "status",
+              "type": "string"
+            },
+            {
+              "name": "execution_id",
+              "type": "string"
+            },
+            {
+              "name": "started_at",
+              "type": "date"
+            },
+            {
+              "name": "stopped_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "c9e96515-2ed0-4106-8361-d3eaf3f25163",
+      "name": "Create cadences table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "config",
+        "columns": {
+          "column": [
+            {
+              "name": "business_name",
+              "type": "string"
+            },
+            {
+              "name": "timezone",
+              "type": "string"
+            },
+            {
+              "name": "quiet_start",
+              "type": "string"
+            },
+            {
+              "name": "quiet_end",
+              "type": "string"
+            },
+            {
+              "name": "owner_name",
+              "type": "string"
+            },
+            {
+              "name": "owner_cell",
+              "type": "string"
+            },
+            {
+              "name": "business_number",
+              "type": "string"
+            },
+            {
+              "name": "alert_channel",
+              "type": "string"
+            },
+            {
+              "name": "owner_email",
+              "type": "string"
+            },
+            {
+              "name": "review_link",
+              "type": "string"
+            },
+            {
+              "name": "lead_instant_text",
+              "type": "string"
+            },
+            {
+              "name": "lead_nudge_1_text",
+              "type": "string"
+            },
+            {
+              "name": "lead_nudge_2_text",
+              "type": "string"
+            },
+            {
+              "name": "lead_nudge_3_text",
+              "type": "string"
+            },
+            {
+              "name": "bridge_whisper",
+              "type": "string"
+            },
+            {
+              "name": "stop_footer",
+              "type": "string"
+            },
+            {
+              "name": "help_text",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "f3d137c8-f6e1-49d0-8b19-dba0bd461fdf",
+      "name": "Create config table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "c882fbe7-5c7d-4641-92c8-181e8f184148",
+      "name": "Existing settings row?",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4b16ecbf-157e-4c4f-b81b-1f1e53df0a35",
+              "leftValue": "={{ !!$json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "9627096a-e9c0-4bf7-8d48-4e2ae7824585",
+      "name": "Row exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "business_name": "={{ $('Your business settings (edit me)').first().json.business_name }}",
+            "timezone": "={{ $('Your business settings (edit me)').first().json.timezone }}",
+            "quiet_start": "={{ $('Your business settings (edit me)').first().json.quiet_start }}",
+            "quiet_end": "={{ $('Your business settings (edit me)').first().json.quiet_end }}",
+            "owner_name": "={{ $('Your business settings (edit me)').first().json.owner_name }}",
+            "owner_cell": "={{ $('Your business settings (edit me)').first().json.owner_cell }}",
+            "business_number": "={{ $('Your business settings (edit me)').first().json.business_number }}",
+            "alert_channel": "={{ $('Your business settings (edit me)').first().json.alert_channel }}",
+            "owner_email": "={{ $('Your business settings (edit me)').first().json.owner_email }}",
+            "review_link": "={{ $('Your business settings (edit me)').first().json.review_link }}",
+            "lead_instant_text": "={{ $('Your business settings (edit me)').first().json.lead_instant_text }}",
+            "lead_nudge_1_text": "={{ $('Your business settings (edit me)').first().json.lead_nudge_1_text }}",
+            "lead_nudge_2_text": "={{ $('Your business settings (edit me)').first().json.lead_nudge_2_text }}",
+            "lead_nudge_3_text": "={{ $('Your business settings (edit me)').first().json.lead_nudge_3_text }}",
+            "bridge_whisper": "={{ $('Your business settings (edit me)').first().json.bridge_whisper }}",
+            "stop_footer": "={{ $('Your business settings (edit me)').first().json.stop_footer }}",
+            "help_text": "={{ $('Your business settings (edit me)').first().json.help_text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "timezone",
+              "displayName": "timezone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "quiet_start",
+              "displayName": "quiet_start",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "quiet_end",
+              "displayName": "quiet_end",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "owner_name",
+              "displayName": "owner_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "owner_cell",
+              "displayName": "owner_cell",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "business_number",
+              "displayName": "business_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "alert_channel",
+              "displayName": "alert_channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "owner_email",
+              "displayName": "owner_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "review_link",
+              "displayName": "review_link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_instant_text",
+              "displayName": "lead_instant_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_nudge_1_text",
+              "displayName": "lead_nudge_1_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_nudge_2_text",
+              "displayName": "lead_nudge_2_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_nudge_3_text",
+              "displayName": "lead_nudge_3_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bridge_whisper",
+              "displayName": "bridge_whisper",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stop_footer",
+              "displayName": "stop_footer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "help_text",
+              "displayName": "help_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        }
+      },
+      "id": "b2b4bc00-7973-42cb-a5a5-2a3a4b8de831",
+      "name": "Update settings",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "business_name": "={{ $('Your business settings (edit me)').first().json.business_name }}",
+            "timezone": "={{ $('Your business settings (edit me)').first().json.timezone }}",
+            "quiet_start": "={{ $('Your business settings (edit me)').first().json.quiet_start }}",
+            "quiet_end": "={{ $('Your business settings (edit me)').first().json.quiet_end }}",
+            "owner_name": "={{ $('Your business settings (edit me)').first().json.owner_name }}",
+            "owner_cell": "={{ $('Your business settings (edit me)').first().json.owner_cell }}",
+            "business_number": "={{ $('Your business settings (edit me)').first().json.business_number }}",
+            "alert_channel": "={{ $('Your business settings (edit me)').first().json.alert_channel }}",
+            "owner_email": "={{ $('Your business settings (edit me)').first().json.owner_email }}",
+            "review_link": "={{ $('Your business settings (edit me)').first().json.review_link }}",
+            "lead_instant_text": "={{ $('Your business settings (edit me)').first().json.lead_instant_text }}",
+            "lead_nudge_1_text": "={{ $('Your business settings (edit me)').first().json.lead_nudge_1_text }}",
+            "lead_nudge_2_text": "={{ $('Your business settings (edit me)').first().json.lead_nudge_2_text }}",
+            "lead_nudge_3_text": "={{ $('Your business settings (edit me)').first().json.lead_nudge_3_text }}",
+            "bridge_whisper": "={{ $('Your business settings (edit me)').first().json.bridge_whisper }}",
+            "stop_footer": "={{ $('Your business settings (edit me)').first().json.stop_footer }}",
+            "help_text": "={{ $('Your business settings (edit me)').first().json.help_text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "timezone",
+              "displayName": "timezone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "quiet_start",
+              "displayName": "quiet_start",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "quiet_end",
+              "displayName": "quiet_end",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "owner_name",
+              "displayName": "owner_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "owner_cell",
+              "displayName": "owner_cell",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "business_number",
+              "displayName": "business_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "alert_channel",
+              "displayName": "alert_channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "owner_email",
+              "displayName": "owner_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "review_link",
+              "displayName": "review_link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_instant_text",
+              "displayName": "lead_instant_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_nudge_1_text",
+              "displayName": "lead_nudge_1_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_nudge_2_text",
+              "displayName": "lead_nudge_2_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "lead_nudge_3_text",
+              "displayName": "lead_nudge_3_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bridge_whisper",
+              "displayName": "bridge_whisper",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stop_footer",
+              "displayName": "stop_footer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "help_text",
+              "displayName": "help_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "85096358-1a69-4a3d-b19d-7510745970ee",
+      "name": "Insert settings",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Run this once": {
+      "main": [
+        [
+          {
+            "node": "Your business settings (edit me)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Your business settings (edit me)": {
+      "main": [
+        [
+          {
+            "node": "Create contacts table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create contacts table": {
+      "main": [
+        [
+          {
+            "node": "Create messages table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create messages table": {
+      "main": [
+        [
+          {
+            "node": "Create cadences table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create cadences table": {
+      "main": [
+        [
+          {
+            "node": "Create config table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create config table": {
+      "main": [
+        [
+          {
+            "node": "Existing settings row?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Existing settings row?": {
+      "main": [
+        [
+          {
+            "node": "Row exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Row exists?": {
+      "main": [
+        [
+          {
+            "node": "Update settings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}

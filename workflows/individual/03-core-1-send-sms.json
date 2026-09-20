@@ -1,0 +1,909 @@
+{
+  "name": "Core 1: Send SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "phone",
+              "type": "string"
+            },
+            {
+              "name": "body",
+              "type": "string"
+            },
+            {
+              "name": "kind",
+              "type": "string"
+            },
+            {
+              "name": "skip_quiet_hours",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "05beada0-89dd-47bf-8823-5442084c58b0",
+      "name": "When called",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "d8ec4d67-a5d5-4a4c-a7cb-33cd188c7241",
+      "name": "Load config",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "returnAll": true,
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('When called').first().json.phone }}"
+            }
+          ]
+        }
+      },
+      "id": "a41f1495-5f09-4668-8e21-f21fbab2d023",
+      "name": "Load contact",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cb3c5b38-350e-4dc9-b856-1a64752b37d8",
+              "leftValue": "={{ $json.consent === 'opted_out' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "0799daea-ff80-43f5-9cc9-c0138a5a190a",
+      "name": "Opted out?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "messages"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('When called').first().json.phone }}",
+            "direction": "out",
+            "body": "={{ $('When called').first().json.body }}",
+            "kind": "={{ $('When called').first().json.kind }}",
+            "twilio_sid": "",
+            "status": "blocked_opted_out"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direction",
+              "displayName": "direction",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "twilio_sid",
+              "displayName": "twilio_sid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "67938c83-aa1b-4d1c-8615-1e0308671832",
+      "name": "Log blocked",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "368fa7ac-ed01-4ea0-a8e4-df7d8a37964c",
+              "name": "sid",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "f93518e6-da71-4e16-b7f2-8050e5646963",
+              "name": "status",
+              "value": "blocked_opted_out",
+              "type": "string"
+            },
+            {
+              "id": "5f8baac5-8af6-4ec9-971a-f8795767da1b",
+              "name": "deferred",
+              "value": "={{ false }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "eb621b3e-661e-416e-b48d-92115a88ce30",
+      "name": "Return blocked",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1100,
+        -260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Load config').first().json;\nconst input = $('When called').first().json;\nconst tz = cfg.timezone || 'America/New_York';\nconst now = DateTime.now().setZone(tz);\nconst [qsH, qsM] = String(cfg.quiet_start || '20:00').split(':').map(Number);\nconst [qeH, qeM] = String(cfg.quiet_end || '08:00').split(':').map(Number);\nconst mins = now.hour * 60 + now.minute;\nconst qs = qsH * 60 + qsM, qe = qeH * 60 + qeM;\nlet quiet;\nif (qs > qe) quiet = (mins >= qs || mins < qe); else quiet = (mins >= qs && mins < qe);\nconst skip = String(input.skip_quiet_hours) === 'true';\nconst defer = quiet && !skip;\nlet resumeAt = null;\nif (defer) {\n  let r = now.set({ hour: qeH, minute: qeM, second: 0, millisecond: 0 });\n  if (r <= now) r = r.plus({ days: 1 });\n  resumeAt = r.toUTC().toISO();\n}\nreturn [{ json: { phone: input.phone, body: input.body, kind: input.kind, quiet, defer, resume_at: resumeAt, local_time: now.toFormat('HH:mm') } }];\n"
+      },
+      "id": "b301dfd8-0688-46aa-9925-c34ba56b0be0",
+      "name": "Quiet hours",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6a9e93ce-73ff-4b3c-972a-7d0dd9840237",
+              "leftValue": "={{ $json.defer === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "82b1d64d-f477-4584-81f3-6ab71f831dc7",
+      "name": "Defer?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "messages"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Quiet hours').first().json.phone }}",
+            "direction": "out",
+            "body": "={{ $('Quiet hours').first().json.body }}",
+            "kind": "={{ $('Quiet hours').first().json.kind }}",
+            "twilio_sid": "",
+            "status": "deferred_quiet_hours"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direction",
+              "displayName": "direction",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "twilio_sid",
+              "displayName": "twilio_sid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2dba190d-532e-4166-b65f-c8307e98e951",
+      "name": "Log deferred",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Quiet hours').first().json.resume_at }}"
+      },
+      "id": "210dead2-861b-42ee-87a9-15fcb80222c5",
+      "name": "Wait until quiet end",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        -180
+      ],
+      "webhookId": "eda9e6c3-1627-42ff-a9ec-d697bb41baa5"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "messages"
+        },
+        "returnAll": true,
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Quiet hours').first().json.phone }}"
+            },
+            {
+              "keyName": "direction",
+              "condition": "eq",
+              "keyValue": "out"
+            }
+          ]
+        }
+      },
+      "id": "f5d45da3-ef2b-4963-83c4-53080d94935e",
+      "name": "Prior outbound",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        60
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Load config').first().json;\nconst q = $('Quiet hours').first().json;\nconst prior = $('Prior outbound').all().filter(i => i.json && i.json.id);\nlet body = String(q.body || '');\nconst footer = String(cfg.stop_footer || '').trim();\n// The registered A2P campaign promises the opt-out line on every message, so it goes on every customer text, not only the first.\nif (footer && !body.toUpperCase().includes('STOP')) body = body + ' ' + footer;\nreturn [{ json: { phone: q.phone, body, kind: q.kind, from: cfg.business_number, deferred: !!q.defer, first_message: prior.length === 0 } }];\n"
+      },
+      "id": "794ccd33-3f44-43c3-848c-151c56f70f5c",
+      "name": "Compose",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $json.from }}",
+        "to": "={{ $json.phone }}",
+        "message": "={{ $json.body }}",
+        "toWhatsapp": false,
+        "options": {}
+      },
+      "id": "60596297-b987-4f3f-a1be-d6f6c59b84a9",
+      "name": "Send",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "messages"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Compose').first().json.phone }}",
+            "direction": "out",
+            "body": "={{ $('Compose').first().json.body }}",
+            "kind": "={{ $('Compose').first().json.kind }}",
+            "twilio_sid": "={{ $json.sid }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "direction",
+              "displayName": "direction",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "twilio_sid",
+              "displayName": "twilio_sid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "72bf2819-394d-466b-966c-550e83f26c41",
+      "name": "Log sent",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "last_outbound_at": "={{ $now.toUTC().toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_inbound_at",
+              "displayName": "last_inbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_outbound_at",
+              "displayName": "last_outbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ]
+        },
+        "options": {},
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Compose').first().json.phone }}"
+            }
+          ]
+        }
+      },
+      "id": "6468794f-9f1a-4b3f-8fa6-39bb28590aaa",
+      "name": "Touch contact",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        0
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "080a6413-db48-429c-9b96-e72994ab91f7",
+              "name": "sid",
+              "value": "={{ $('Send').first().json.sid }}",
+              "type": "string"
+            },
+            {
+              "id": "ce4ba59d-f991-4ce4-9d57-b3c9a6fb25e6",
+              "name": "status",
+              "value": "={{ $('Send').first().json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "56e2e83e-5d63-4a23-97fc-9fc9fc0d7e3a",
+              "name": "deferred",
+              "value": "={{ $('Compose').first().json.deferred }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "8be1f309-2011-4a82-92a9-9e1ad1560be3",
+      "name": "Return",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        2640,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "When called": {
+      "main": [
+        [
+          {
+            "node": "Load config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load config": {
+      "main": [
+        [
+          {
+            "node": "Load contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load contact": {
+      "main": [
+        [
+          {
+            "node": "Opted out?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Opted out?": {
+      "main": [
+        [
+          {
+            "node": "Log blocked",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Quiet hours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log blocked": {
+      "main": [
+        [
+          {
+            "node": "Return blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quiet hours": {
+      "main": [
+        [
+          {
+            "node": "Defer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Defer?": {
+      "main": [
+        [
+          {
+            "node": "Log deferred",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prior outbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log deferred": {
+      "main": [
+        [
+          {
+            "node": "Wait until quiet end",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait until quiet end": {
+      "main": [
+        [
+          {
+            "node": "Prior outbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prior outbound": {
+      "main": [
+        [
+          {
+            "node": "Compose",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose": {
+      "main": [
+        [
+          {
+            "node": "Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send": {
+      "main": [
+        [
+          {
+            "node": "Log sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log sent": {
+      "main": [
+        [
+          {
+            "node": "Touch contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Touch contact": {
+      "main": [
+        [
+          {
+            "node": "Return",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}
