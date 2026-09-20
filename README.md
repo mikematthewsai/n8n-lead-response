@@ -48,7 +48,7 @@ These sit on top of the eight. Each one is self contained, reuses Core 1, Core 3
 
 Morning Brief reads the `reviews` table, which setup creates and which the review workflow in the paid version writes to. On an install without it the review lines are simply absent from the brief.
 
-They are generated rather than extracted from a live install, and they have not been run yet. [docs/TEST-PLAN.md](docs/TEST-PLAN.md) is the script to run at the keyboard, written before the results exist rather than after. Every setting they read has a default, so they run on an existing install without touching the config table.
+They were generated rather than extracted from a live install, then run against the real system on 2026-09-20. Quote Chaser passed 9 of 9, Invoice Nudge 18 of 18, Morning Brief 8 of 9 with one cosmetic partial. Two real bugs turned up and both are written up in [docs/TEST-RESULTS.md](docs/TEST-RESULTS.md). Every setting they read has a default, so they run on an existing install without touching the config table.
 
 ## Install
 
@@ -64,7 +64,7 @@ Four values need filling in: `__OWNER_CELL__`, `__BUSINESS_NUMBER__`, `__OWNER_E
 
 ## Does it work
 
-[docs/TEST-RESULTS.md](docs/TEST-RESULTS.md) has the log. 11 of 13 tests passed on the live system with timestamps. Two are not fully verified and both are written up there rather than quietly left out, including exactly which last inch of the press-1 connect is unproven and why.
+[docs/TEST-RESULTS.md](docs/TEST-RESULTS.md) has the log for all eleven. The core eight: 11 of 13 passed on the live system with timestamps, and the two that are not fully verified are written up rather than quietly left out, including exactly which last inch of the press-1 connect is unproven and why. The three add ons: 35 of 36 checks passed, with the one partial and two fixed bugs described in full.
 
 The bug that was found is written up too. The owner alert was being sent from the business number, so an owner who had ever texted STOP to their own line would have silently stopped receiving lead alerts. It failed closed and quiet, which is the worst way for this particular system to fail. Fixed in Core 3 and re-tested.
 
@@ -74,7 +74,7 @@ The bug that was found is written up too. The owner alert was being sent from th
 - [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md), plain English, written for a business owner rather than a developer
 - [docs/SETUP.md](docs/SETUP.md), the install runbook plus a single page to leave with the owner
 - [docs/TEST-RESULTS.md](docs/TEST-RESULTS.md), what was tested, what passed, what did not, and the bug
-- [docs/TEST-PLAN.md](docs/TEST-PLAN.md), the unrun script for the three add ons
+- [docs/TEST-PLAN.md](docs/TEST-PLAN.md), the script that was run at the keyboard for the three add ons
 
 ## Limits
 
