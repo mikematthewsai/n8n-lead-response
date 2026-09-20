@@ -1,0 +1,2533 @@
+{
+  "name": "Invoice Nudge",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "invoice-sent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d31bac62-35c8-455a-ba65-532b51b43e6a",
+      "name": "Invoice sent",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        260
+      ],
+      "webhookId": "1ad67158-a1f1-447b-bee5-6a0e4fb80e88"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "9a6dbe51-d075-4369-ae91-644e5f209ff4",
+      "name": "Load config",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Load config').first().json || {};\nconst b = $('Invoice sent').first().json.body || {};\n\nconst digits = String(b.phone || '').replace(/[^0-9]/g, '');\nlet phone = '';\nif (digits.length === 10) phone = '+1' + digits;\nelse if (digits.length === 11 && digits.startsWith('1')) phone = '+' + digits;\nelse if (digits.length > 11) phone = '+' + digits;\nconst pretty = phone ? phone.replace(/^\\+1(\\d{3})(\\d{3})(\\d{4})$/, '($1) $2-$3') : '';\n\nconst name = String(b.name || '').trim();\nconst who = name || pretty || 'there';\nconst amountRaw = String(b.amount || '').trim();\nconst money = amountRaw ? (amountRaw.startsWith('$') ? amountRaw : '$' + amountRaw) : '';\nconst invoiceId = String(b.invoice_id || '').trim();\nconst url = String(b.invoice_url || '').trim();\nconst biz = cfg.business_name || 'us';\nconst owner = cfg.owner_name || 'the owner';\n\n// Read numbers explicitly so a configured 0 is honoured instead of falling back.\nconst num = (v, dflt) => {\n  if (v === null || v === undefined || String(v).trim() === '') return dflt;\n  const n = Number(v);\n  return Number.isFinite(n) && n >= 0 ? n : dflt;\n};\n\nconst tz = cfg.timezone || 'America/New_York';\nconst now = DateTime.now().setZone(tz);\n\n// The due date drives everything. If the caller gives one we use it. If not we fall back to\n// the configured terms. A due date already in the past means the first reminder is due now.\nlet due = null;\nif (b.due_date) {\n  const parsed = DateTime.fromISO(String(b.due_date), { zone: tz });\n  if (parsed.isValid) due = parsed;\n}\nif (!due) due = now.plus({ days: num(cfg.invoice_due_days, 7) });\n\nconst gap2 = num(cfg.invoice_wait_2_days, 3);\nconst gap3 = num(cfg.invoice_wait_3_days, 4);\n\n// Reminders land at 10am local. One already past its moment fires as soon as the run reaches it,\n// which is what you want for a test and for an invoice that was already overdue when it arrived.\nconst at = (dt) => {\n  const target = dt.set({ hour: 10, minute: 0, second: 0, millisecond: 0 });\n  return (target < now ? now : target).toUTC().toISO();\n};\nconst dueLabel = due.toFormat('cccc LLL d');\n\nconst fill = (t, dflt) => String(t || dflt)\n  .replace(/\\{name\\}/g, who)\n  .replace(/\\{business\\}/g, biz)\n  .replace(/\\{owner\\}/g, owner)\n  .replace(/\\{amount\\}/g, money || 'the invoice')\n  .replace(/\\{link\\}/g, url)\n  .replace(/\\{due\\}/g, dueLabel)\n  .replace(/\\{invoice\\}/g, invoiceId)\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nreturn [{ json: {\n  ok: !!phone,\n  phone, pretty, name, amount: money, invoice_id: invoiceId, url,\n  due_label: dueLabel,\n  nudge_1: fill(cfg.invoice_nudge_1_text, 'Hi {name}, friendly reminder from {business}: the invoice for {amount} is due {due}. {link} Any questions just reply to this text.'),\n  nudge_2: fill(cfg.invoice_nudge_2_text, 'Hi {name}, the {amount} invoice from {business} is past due now. If something is wrong with it just reply and {owner} will sort it out. {link}'),\n  nudge_3: fill(cfg.invoice_nudge_3_text, 'Last reminder from me {name}, on the {amount} invoice from {business}. If you need more time or a payment plan, reply and we will work it out. {link}'),\n  nudge_1_at: at(due),\n  nudge_2_at: at(due.plus({ days: gap2 })),\n  nudge_3_at: at(due.plus({ days: gap2 + gap3 })),\n  owner_text: 'Invoice reminders started for ' + who + ' ' + pretty + (money ? ' at ' + money : '') + (invoiceId ? ' (' + invoiceId + ')' : '') + ', due ' + dueLabel + '.'\n} }];\n"
+      },
+      "id": "408d016b-5908-4266-acc1-75d482097647",
+      "name": "Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5f8dd4b7-4169-4743-981c-036f25bfaf33",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "8c5c24fe-854f-408d-b0bd-c7e6e305dc20",
+      "name": "Usable phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -20,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true } }}",
+        "options": {}
+      },
+      "id": "7c5d9c44-1130-4735-af31-f4074dbb54c0",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -180,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "returnAll": true,
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare').first().json.phone }}"
+            }
+          ]
+        }
+      },
+      "id": "08046380-b472-41e1-a50a-cbc3542a30be",
+      "name": "Find contact",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a083800b-6587-4dfa-8490-ba73080912f6",
+              "leftValue": "={{ ($json.id !== undefined && $json.id !== null) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "db517895-7165-4c30-9bb1-b22d713c763e",
+      "name": "Known contact?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        260,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $('Prepare').first().json.name || $('Find contact').first().json.name || '' }}",
+            "stage": "invoiced",
+            "source": "={{ $('Find contact').first().json.source || 'invoice' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_inbound_at",
+              "displayName": "last_inbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_outbound_at",
+              "displayName": "last_outbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare').first().json.phone }}"
+            }
+          ]
+        }
+      },
+      "id": "83a5cd64-f167-4844-b527-e4ee98da0364",
+      "name": "Refresh contact",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "name": "={{ $('Prepare').first().json.name }}",
+            "source": "invoice",
+            "consent": "opted_in",
+            "stage": "invoiced",
+            "notes": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_inbound_at",
+              "displayName": "last_inbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_outbound_at",
+              "displayName": "last_outbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "05b3fa31-991e-4730-9653-3f21b398853c",
+      "name": "Create contact",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "workflow": "invoice_nudge",
+            "step": 0,
+            "status": "active",
+            "execution_id": "={{ $execution.id }}",
+            "started_at": "={{ $now.toUTC().toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "00148960-2802-4c39-8dc7-85c3c40fe7bc",
+      "name": "Open cadence",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_ALERT__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "invoice_chase_started",
+            "text": "={{ $('Prepare').first().json.owner_text }}",
+            "urgency": "normal",
+            "phone": "={{ $('Prepare').first().json.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "de6ec6e5-56c5-4894-a419-4de6e7bd97e4",
+      "name": "Tell the owner",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        860,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Prepare').first().json.nudge_1_at }}"
+      },
+      "id": "205c2bab-45c2-4615-8dca-b638cec54f40",
+      "name": "Wait for reminder 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1060,
+        160
+      ],
+      "webhookId": "7cf82a93-5177-4663-b1c3-795b8d93f2d8"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "returnAll": true,
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            },
+            {
+              "keyName": "workflow",
+              "condition": "eq",
+              "keyValue": "invoice_nudge"
+            }
+          ]
+        }
+      },
+      "id": "24792064-dad4-4c1b-bd8b-93302faaadaa",
+      "name": "Cadence state 1",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1240,
+        160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9d7354fb-6776-422e-98a5-0293594cd951",
+              "leftValue": "={{ ($json.status === 'active') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a8a93ab3-2945-4d37-9521-7911d9073bdd",
+      "name": "Still active 1?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1420,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_SENDSMS__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "body": "={{ $('Prepare').first().json.nudge_1 }}",
+            "kind": "invoice_nudge_1",
+            "skip_quiet_hours": "false"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "skip_quiet_hours",
+              "displayName": "skip_quiet_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "4a2871f8-4164-487d-9a54-f156a92b8556",
+      "name": "Reminder 1",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1600,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "step": 1
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            }
+          ]
+        }
+      },
+      "id": "d5b15b85-3f0a-4203-b7e5-4b6abe5c2b46",
+      "name": "Step 1",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Prepare').first().json.nudge_2_at }}"
+      },
+      "id": "6c2f4fbb-0444-4fb0-aef3-ba3ddebe1b13",
+      "name": "Wait for reminder 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1960,
+        160
+      ],
+      "webhookId": "67aa512d-e7b8-46c5-8545-c4bcbccc9764"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "returnAll": true,
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            },
+            {
+              "keyName": "workflow",
+              "condition": "eq",
+              "keyValue": "invoice_nudge"
+            }
+          ]
+        }
+      },
+      "id": "8e6a6ceb-a9f7-4e73-b5d5-f8249cc853d1",
+      "name": "Cadence state 2",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2140,
+        160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a381b75c-bf76-47a0-b2dd-0e18dbe85b54",
+              "leftValue": "={{ ($json.status === 'active') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a390a1fe-0e37-4075-bbcb-f17a01086cea",
+      "name": "Still active 2?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2320,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_SENDSMS__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "body": "={{ $('Prepare').first().json.nudge_2 }}",
+            "kind": "invoice_nudge_2",
+            "skip_quiet_hours": "false"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "skip_quiet_hours",
+              "displayName": "skip_quiet_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "812db4cb-394b-4d83-824a-5301690edba0",
+      "name": "Reminder 2",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2500,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "step": 2
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            }
+          ]
+        }
+      },
+      "id": "1115fe66-ccbe-4176-a646-56f36c3033e0",
+      "name": "Step 2",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2680,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Prepare').first().json.nudge_3_at }}"
+      },
+      "id": "b01b7bb1-159a-4d35-9f21-85840b3169fc",
+      "name": "Wait for reminder 3",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2860,
+        160
+      ],
+      "webhookId": "a6237352-7c5e-480a-a5dc-cff79bfe730a"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "returnAll": true,
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            },
+            {
+              "keyName": "workflow",
+              "condition": "eq",
+              "keyValue": "invoice_nudge"
+            }
+          ]
+        }
+      },
+      "id": "da4140af-95aa-4732-adcb-c65767b1278d",
+      "name": "Cadence state 3",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3040,
+        160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d8361742-e0c0-43e0-bc94-775b8281dc0f",
+              "leftValue": "={{ ($json.status === 'active') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "b00a2ebb-4637-4963-9139-147a748cc1be",
+      "name": "Still active 3?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3220,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_SENDSMS__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "body": "={{ $('Prepare').first().json.nudge_3 }}",
+            "kind": "invoice_nudge_3",
+            "skip_quiet_hours": "false"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "skip_quiet_hours",
+              "displayName": "skip_quiet_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "55cc8de9-07f2-4efe-9750-3c6570ac483b",
+      "name": "Reminder 3",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3400,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "step": 3
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            }
+          ]
+        }
+      },
+      "id": "f6f6daf5-61fa-4c93-97fe-dd5736ca2a75",
+      "name": "Step 3",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3580,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "finished_no_reply",
+            "stopped_at": "={{ $now.toUTC().toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            }
+          ]
+        }
+      },
+      "id": "8e29859a-d6c9-4e48-a294-565d21105726",
+      "name": "Close cadence",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3760,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_ALERT__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "cadence_done",
+            "text": "={{ ($('Prepare').first().json.name || $('Prepare').first().json.pretty) + ' never replied to the invoice reminders. Three texts sent, nothing back.' }}",
+            "urgency": "normal",
+            "phone": "={{ $('Prepare').first().json.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "345aa7ca-6d17-48e0-ace5-2079e1bf5d4b",
+      "name": "Owner summary",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3940,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "invoice-paid",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "2d8997ab-608e-4e39-ac66-518fb1702408",
+      "name": "Invoice paid",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        700
+      ],
+      "webhookId": "27e08e10-ae83-4f25-861e-5311c440527c"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "2dee19e3-a3ea-4645-b71c-cde4c18a9a2e",
+      "name": "Load config (paid)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Load config (paid)').first().json || {};\nconst b = $('Invoice paid').first().json.body || {};\n\nconst digits = String(b.phone || '').replace(/[^0-9]/g, '');\nlet phone = '';\nif (digits.length === 10) phone = '+1' + digits;\nelse if (digits.length === 11 && digits.startsWith('1')) phone = '+' + digits;\nelse if (digits.length > 11) phone = '+' + digits;\nconst pretty = phone ? phone.replace(/^\\+1(\\d{3})(\\d{3})(\\d{4})$/, '($1) $2-$3') : '';\n\nconst name = String(b.name || '').trim();\nconst who = name || pretty || 'there';\nconst amountRaw = String(b.amount || '').trim();\nconst money = amountRaw ? (amountRaw.startsWith('$') ? amountRaw : '$' + amountRaw) : '';\nconst biz = cfg.business_name || 'us';\n\n// Sending a receipt text is opt out, not opt in. An owner who does not want it sets\n// invoice_receipt_text to the word off rather than hunting for a node to delete.\nconst raw = cfg.invoice_receipt_text;\nconst off = String(raw || '').trim().toLowerCase() === 'off';\n\nconst body = String(raw && !off ? raw : 'Thanks {name}, we have your payment{amount} at {business}. Appreciate the business.')\n  .replace(/\\{name\\}/g, who)\n  .replace(/\\{business\\}/g, biz)\n  .replace(/\\{amount\\}/g, money ? ' of ' + money : '')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nreturn [{ json: {\n  ok: !!phone,\n  send_receipt: !!phone && !off,\n  phone, pretty, name, amount: money, body,\n  owner_text: 'Payment received from ' + who + ' ' + pretty + (money ? ' for ' + money : '') + '. Reminders stopped.'\n} }];\n"
+      },
+      "id": "8666865f-ce07-4a94-8924-f88a5422f4ee",
+      "name": "Mark it paid",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -320,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true } }}",
+        "options": {}
+      },
+      "id": "810a612d-2381-4c58-9722-4cb2b06c279e",
+      "name": "Respond (paid)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -180,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "407ddc2c-c39a-469f-9ea5-3c55d9894143",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "6edb2590-fbc7-451e-916a-2aabe40b8bdd",
+      "name": "Usable phone? (paid)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -20,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "stopped_paid",
+            "stopped_at": "={{ $now.toUTC().toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Mark it paid').first().json.phone }}"
+            },
+            {
+              "keyName": "workflow",
+              "condition": "eq",
+              "keyValue": "invoice_nudge"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "active"
+            }
+          ]
+        }
+      },
+      "id": "c5436fa2-3461-43d8-ab95-72ee18319917",
+      "name": "Stop invoice reminders",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "stage": "paid"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_inbound_at",
+              "displayName": "last_inbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_outbound_at",
+              "displayName": "last_outbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {},
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Mark it paid').first().json.phone }}"
+            }
+          ]
+        }
+      },
+      "id": "aaba90b3-7c57-4b68-805c-4630381207f3",
+      "name": "Contact paid",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        260,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "26b0fa09-8b35-4396-84ea-d6340fb36e54",
+              "leftValue": "={{ $('Mark it paid').first().json.send_receipt === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "5dca90b4-d031-4026-a67d-f34aa310f794",
+      "name": "Send a receipt?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_SENDSMS__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Mark it paid').first().json.phone }}",
+            "body": "={{ $('Mark it paid').first().json.body }}",
+            "kind": "invoice_receipt",
+            "skip_quiet_hours": "false"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "skip_quiet_hours",
+              "displayName": "skip_quiet_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "ccb9a988-a753-4ae2-9761-59a0f7ca7106",
+      "name": "Receipt text",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        620,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_ALERT__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "invoice_paid",
+            "text": "={{ $('Mark it paid').first().json.owner_text }}",
+            "urgency": "normal",
+            "phone": "={{ $('Mark it paid').first().json.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "3bdd5c48-d6ef-40ea-a6c4-eb9307f60109",
+      "name": "Tell the owner (paid)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        800,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "Invoice sent": {
+      "main": [
+        [
+          {
+            "node": "Load config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load config": {
+      "main": [
+        [
+          {
+            "node": "Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond": {
+      "main": [
+        [
+          {
+            "node": "Usable phone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usable phone?": {
+      "main": [
+        [
+          {
+            "node": "Find contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Find contact": {
+      "main": [
+        [
+          {
+            "node": "Known contact?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Known contact?": {
+      "main": [
+        [
+          {
+            "node": "Refresh contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh contact": {
+      "main": [
+        [
+          {
+            "node": "Open cadence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create contact": {
+      "main": [
+        [
+          {
+            "node": "Open cadence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Open cadence": {
+      "main": [
+        [
+          {
+            "node": "Tell the owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tell the owner": {
+      "main": [
+        [
+          {
+            "node": "Wait for reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Cadence state 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadence state 1": {
+      "main": [
+        [
+          {
+            "node": "Still active 1?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still active 1?": {
+      "main": [
+        [
+          {
+            "node": "Reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Step 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1": {
+      "main": [
+        [
+          {
+            "node": "Wait for reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reminder 2": {
+      "main": [
+        [
+          {
+            "node": "Cadence state 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadence state 2": {
+      "main": [
+        [
+          {
+            "node": "Still active 2?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still active 2?": {
+      "main": [
+        [
+          {
+            "node": "Reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Reminder 2": {
+      "main": [
+        [
+          {
+            "node": "Step 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2": {
+      "main": [
+        [
+          {
+            "node": "Wait for reminder 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reminder 3": {
+      "main": [
+        [
+          {
+            "node": "Cadence state 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadence state 3": {
+      "main": [
+        [
+          {
+            "node": "Still active 3?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still active 3?": {
+      "main": [
+        [
+          {
+            "node": "Reminder 3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Reminder 3": {
+      "main": [
+        [
+          {
+            "node": "Step 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 3": {
+      "main": [
+        [
+          {
+            "node": "Close cadence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close cadence": {
+      "main": [
+        [
+          {
+            "node": "Owner summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice paid": {
+      "main": [
+        [
+          {
+            "node": "Load config (paid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load config (paid)": {
+      "main": [
+        [
+          {
+            "node": "Mark it paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark it paid": {
+      "main": [
+        [
+          {
+            "node": "Respond (paid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond (paid)": {
+      "main": [
+        [
+          {
+            "node": "Usable phone? (paid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usable phone? (paid)": {
+      "main": [
+        [
+          {
+            "node": "Stop invoice reminders",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Stop invoice reminders": {
+      "main": [
+        [
+          {
+            "node": "Contact paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact paid": {
+      "main": [
+        [
+          {
+            "node": "Send a receipt?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a receipt?": {
+      "main": [
+        [
+          {
+            "node": "Receipt text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tell the owner (paid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receipt text": {
+      "main": [
+        [
+          {
+            "node": "Tell the owner (paid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}
