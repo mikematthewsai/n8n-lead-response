@@ -374,6 +374,48 @@
     },
     {
       "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "reviews",
+        "columns": {
+          "column": [
+            {
+              "name": "phone",
+              "type": "string"
+            },
+            {
+              "name": "status",
+              "type": "string"
+            },
+            {
+              "name": "score",
+              "type": "number"
+            },
+            {
+              "name": "asked_at",
+              "type": "date"
+            },
+            {
+              "name": "replied_at",
+              "type": "date"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "405207a9-1fcb-4713-bd5d-3c9b31bdb4fa",
+      "name": "Create reviews table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "operation": "get",
         "dataTableId": {
           "__rl": true,
@@ -388,7 +430,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1320,
+        1540,
         0
       ],
       "alwaysOutputData": true
@@ -424,7 +466,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        1540,
+        1760,
         0
       ]
     },
@@ -648,7 +690,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1760,
+        1980,
         -140
       ]
     },
@@ -862,7 +904,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1760,
+        1980,
         140
       ]
     }
@@ -927,7 +969,7 @@
       "main": [
         [
           {
-            "node": "Existing settings row?",
+            "node": "Create reviews table",
             "type": "main",
             "index": 0
           }
@@ -957,6 +999,17 @@
         [
           {
             "node": "Insert settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create reviews table": {
+      "main": [
+        [
+          {
+            "node": "Existing settings row?",
             "type": "main",
             "index": 0
           }

@@ -1,5 +1,7 @@
 # Lead Response
 
+[![checks](https://github.com/mikematthewsai/n8n-lead-response/actions/workflows/validate.yml/badge.svg)](https://github.com/mikematthewsai/n8n-lead-response/actions/workflows/validate.yml)
+
 Eleven n8n workflows that make sure a small business never loses a lead to a missed call, and then keeps following up after it.
 
 This is not a demo. It was extracted from a live production install running on n8n Cloud against a real Twilio number, tested on real handsets, and it found a real bug in the process. Credentials are stripped and identifiers are replaced with placeholders.
@@ -22,7 +24,7 @@ Import in this order. Each one refers to the ones before it.
 
 | # | Workflow | Nodes | What it is |
 | --- | --- | --- | --- |
-| 1 | Setup: tables and settings | 10 | Creates the four data tables and writes the config row |
+| 1 | Setup: tables and settings | 11 | Creates the five data tables and writes the config row |
 | 2 | Core 0: Error Handler | 5 | Every other workflow points its error handler here |
 | 3 | Core 1: Send SMS | 16 | The single send path. Quiet hours, opt-out check, STOP footer, delivery logging |
 | 4 | Core 3: Owner Alert | 9 | Alerts the owner. Falls back to email if the text is refused |
@@ -31,7 +33,8 @@ Import in this order. Each one refers to the ones before it.
 | 7 | Lead Response A: Website form | 3 | Webhook entry point for a form |
 | 8 | Lead Response B: Phone line | 13 | Voice entry point. Missed call detection and the press-1 bridge |
 
-107 nodes total. Four data tables: contacts, messages, cadences, config.
+108 nodes total. Five data tables: contacts, messages, cadences, config, reviews.
+The first four are used by the eight below. `reviews` is created here so that Morning Brief works on a clean install.
 
 ## The three add ons
 
@@ -43,6 +46,8 @@ These sit on top of the eight. Each one is self contained, reuses Core 1, Core 3
 | 10 | Invoice Nudge | 38 | Same shape for money owed, keyed off the due date. A second entry point marks it paid, stops the reminders and sends a receipt |
 | 11 | Morning Brief | 9 | One text at 7am. What came in, what is still waiting on a reply, what follow ups are running, what the review scores did |
 
+Morning Brief reads the `reviews` table, which setup creates and which the review workflow in the paid version writes to. On an install without it the review lines are simply absent from the brief.
+
 They are generated rather than extracted from a live install, and they have not been run yet. [docs/TEST-PLAN.md](docs/TEST-PLAN.md) is the script to run at the keyboard, written before the results exist rather than after. Every setting they read has a default, so they run on an existing install without touching the config table.
 
 ## Install
@@ -50,6 +55,8 @@ They are generated rather than extracted from a live install, and they have not 
 Read [docs/SETUP.md](docs/SETUP.md). It is the runbook from the first real install, written from what happened rather than from a plan, and it budgets an hour, most of it waiting on signups.
 
 You need an n8n instance with Data Tables, a Twilio account, and a number that is already A2P registered. A brand new number cannot text until A2P clears, which takes days. That is the single most common thing that delays a launch, so check it first.
+
+`workflows/lead-response-workflows.json` is the importable bundle of all eleven. It is generated from `workflows/individual/` by `scripts/build_bundle.py` and never edited by hand, so the two can never drift apart.
 
 After import, four cross references need repointing. They appear in the bundle as `__WF_ERROR__`, `__WF_SENDSMS__`, `__WF_ALERT__` and `__WF_PIPELINE__`.
 
@@ -63,6 +70,7 @@ The bug that was found is written up too. The owner alert was being sent from th
 
 ## Docs
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), how the pieces fit, the contracts between them and what happens when each one fails
 - [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md), plain English, written for a business owner rather than a developer
 - [docs/SETUP.md](docs/SETUP.md), the install runbook plus a single page to leave with the owner
 - [docs/TEST-RESULTS.md](docs/TEST-RESULTS.md), what was tested, what passed, what did not, and the bug
