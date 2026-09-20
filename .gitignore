@@ -1,0 +1,10 @@
+# Nothing from a live install belongs in this repo.
+*.env
+.env*
+credentials*.json
+*-with-credentials.json
+
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc

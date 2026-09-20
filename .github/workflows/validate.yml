@@ -1,0 +1,24 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: workflows tell the truth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bundle matches the individual workflows
+        run: python3 scripts/build_bundle.py --check
+
+      - name: Repo claims match the workflow files
+        run: python3 scripts/validate.py
