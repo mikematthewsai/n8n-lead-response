@@ -1,6 +1,6 @@
 # Architecture
 
-How the fourteen workflows fit together, what each one promises the others, and
+How the fifteen workflows fit together, what each one promises the others, and
 what happens when a piece fails.
 
 ## The shape
@@ -31,6 +31,8 @@ allowed to touch Twilio.
   Invoice Nudge    POST /invoice-sent                     Core 1 + Core 3
                    POST /invoice-paid
   Morning Brief    07:00 schedule            -----------> Core 3
+  Appointment      POST /appointment-booked  -----------> Core 1 + Core 3
+  Reminder         quiet hours resolved before the wait
 
   Entry forms      hosted n8n forms, one per action, POST to the three
                    webhooks above so a person can start one from a phone
@@ -72,6 +74,7 @@ These are stable. A change to any of them is a breaking change for every caller.
 | Quote Chaser | `POST /quote-sent` | `phone`, `name`, `amount`, `quote_id` |
 | Invoice Nudge | `POST /invoice-sent`, `/invoice-paid` | `phone`, `name`, `amount`, `invoice_id`, `invoice_url`, `due_date` |
 | Morning Brief | 07:00 schedule | none |
+| Appointment Reminder | `POST /appointment-booked` | `phone`, `name`, `when`, `job`, `address` |
 
 `kind` on Core 1 is what separates a reply from marketing, which is what lets
 one send path apply quiet hours correctly to both.
