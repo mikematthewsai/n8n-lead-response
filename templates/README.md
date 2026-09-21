@@ -8,6 +8,7 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 | --- | --- | --- |
 | [quote-chaser-sms-twilio.json](quote-chaser-sms-twilio.json) | Chases an unanswered quote with up to three SMS nudges and stops the moment the customer replies. No database: before each nudge it asks Twilio whether the customer has texted the business number since the quote went out | 2026-09-20, live, three runs below |
 | [owner-brief-sms-twilio.json](owner-brief-sms-twilio.json) | Texts the owner a short summary every morning at 7: customer texts in, texts out, anything undelivered, and who is still waiting on a reply, newest first. No database: it reads the Twilio message log directly | 2026-09-20, live, three runs below |
+| [appointment-reminders-sms-quiet-hours.json](appointment-reminders-sms-quiet-hours.json) | Sends a booking confirmation and reminders 24 hours and 2 hours before each appointment, and never texts during quiet hours. Every send time, quiet hours included, is planned the moment the booking arrives, so the waits never have to re-check anything | 2026-09-21, live, four runs plus eleven scheduling cases below |
 
 ## Quote chaser, test runs on 2026-09-20
 
@@ -37,3 +38,34 @@ Run against the same Twilio number, triggered by hand instead of waiting for 7am
 After testing, the lookback went back to 24 hours and both phone numbers went back to placeholders. The exported file hashes identically to the workflow in n8n, apart from credential references, which are removed.
 
 What is not covered: the 7am schedule itself was not observed firing, a day with undelivered texts did not come up, and the list was never long enough to show the "plus N more" ending.
+
+## Appointment reminders, test runs on 2026-09-21
+
+Live runs against the same Twilio number, with the reminder hours shrunk to minutes so each run finished in under 25 minutes.
+
+| Run | Setup | Result |
+| --- | --- | --- |
+| A | Appointment 16 minutes out, reminders at 12 and 6 minutes before | Passed. Confirmation sent at once. Reminder 1 was correctly skipped because it would have landed within 5 minutes of booking. Reminder 2 sent on time and the run ended |
+| B | Appointment 20 minutes out, reminders at 12 and 6 minutes before | Passed. Confirmation, reminder 1 and reminder 2 all sent at their planned times |
+| C | Phone number is `123` | Passed. The webhook answered with the reason, the owner got a text saying why, and nothing went to the customer |
+| D | Booked at 11:30 PM inside a live quiet window of 11:00 to 11:45 PM, appointment at 11:58 PM | Passed. The confirmation waited and went out at 11:45:00, the moment quiet hours ended. Reminder 1 fell inside quiet hours, moved earlier, landed in the past and was skipped. Reminder 2 sent at 11:52 |
+
+The first draft of the planning code also went through eleven scheduling cases in a local harness with the clock frozen, using the real defaults (24 and 2 hours, quiet 8 PM to 8 AM):
+
+| Booked | Appointment | Planned |
+| --- | --- | --- |
+| Mon 10:00 | Thu 14:00 | Confirmation Mon 10:00, reminders Wed 14:00 and Thu 12:00 |
+| Mon 10:00 | Tue 09:00 | Confirmation now. The 24 hour reminder is already past, so it is skipped. The 2 hour reminder falls at 7 AM, inside quiet hours, so it moves to Mon 19:30 |
+| Mon 10:00 | Thu 08:30 | Reminders Wed 08:30 and, moved out of quiet hours, Wed 19:30 |
+| Mon 10:00 | Thu 07:00 | Both reminders fall inside quiet hours and move to 19:30 the evening before each |
+| Mon 23:00 | Tue 09:00 | Confirmation waits until 8:00 AM. Both reminders would be past or inside quiet hours, so only the confirmation goes |
+| Mon 23:00 | Tue 07:30 | Nothing is sent: the confirmation would arrive after quiet hours end, which is after the appointment |
+| Mon 21:00 | Wed 21:30 | Confirmation Tue 08:00, reminders Tue 19:30 and Wed 19:30 |
+| Mon 10:00 | Yesterday | Refused: the appointment time has already passed |
+| Mon 10:00 | "next tuesday" | Refused: not an ISO date and time |
+| Mon 10:00 | Phone written as 1 (404) 555-0123 | Accepted as +14045550123 |
+| Mon 10:00 | Thu 15:00, daytime quiet window 1 to 2 PM | 2 hour reminder moves from 13:00 to 12:30 |
+
+After testing, every setting went back to its default and the business details to placeholders. The exported file hashes identically to the workflow in n8n, apart from credential references, which are removed.
+
+What is not covered: the full 24 hour wait was not run end to end, a number that has texted STOP was not tried (the Twilio nodes are set to carry on if a send fails), and daylight saving changes between booking and appointment were not tested live. A booking that lands too late for any text to fit before the appointment sends nothing and does not alert the owner.

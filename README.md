@@ -136,7 +136,7 @@ A reply stops the reminders, because the inbound router closes any active cadenc
 
 ## Standalone templates
 
-The workflows above are a system and cannot be imported one at a time. [templates/](templates/) holds single workflows that stand alone, written for n8n's public template library. The first is an SMS quote chaser that asks Twilio directly whether the customer has replied, so it needs no database at all. The second texts the owner a 7am brief built from the Twilio message log: who texted, what went out, what failed and who is still waiting.
+The workflows above are a system and cannot be imported one at a time. [templates/](templates/) holds single workflows that stand alone, written for n8n's public template library. The first is an SMS quote chaser that asks Twilio directly whether the customer has replied, so it needs no database at all. The second texts the owner a 7am brief built from the Twilio message log: who texted, what went out, what failed and who is still waiting. The third sends a booking confirmation and two appointment reminders, with quiet hours worked out the moment the booking arrives.
 
 ## Install
 

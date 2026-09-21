@@ -1,0 +1,639 @@
+{
+  "name": "Template: Appointment reminders by SMS with quiet hours",
+  "nodes": [
+    {
+      "id": "f6528956-a187-45da-9e3e-f981bd7a147d",
+      "name": "Appointment booked",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        500
+      ],
+      "webhookId": "2473ae9c-cce2-4829-a7ef-914c661cd43b",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "appointment-reminder-template",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "257abf70-76f8-4d81-a051-b08db6da54ba",
+      "name": "Your settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        500
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "88a2b989-a4c2-45bd-9ee4-6fa5861a84eb",
+              "name": "business_name",
+              "type": "string",
+              "value": "Your business"
+            },
+            {
+              "id": "f2f28cde-fc43-4925-bdc9-35889150bfd8",
+              "name": "business_number",
+              "type": "string",
+              "value": "+15555550100"
+            },
+            {
+              "id": "a41c710c-451e-47a3-907c-027b9df252d3",
+              "name": "owner_cell",
+              "type": "string",
+              "value": "+15555550199"
+            },
+            {
+              "id": "5a5ca289-b8cd-4141-a81b-bc2f11259ee6",
+              "name": "timezone",
+              "type": "string",
+              "value": "America/New_York"
+            },
+            {
+              "id": "55d1ad25-9f97-40f2-8786-64521dc988aa",
+              "name": "reminder_1_hours",
+              "type": "number",
+              "value": 24
+            },
+            {
+              "id": "33b533b8-90f5-45f4-8c42-d57aa5822a7d",
+              "name": "reminder_2_hours",
+              "type": "number",
+              "value": 2
+            },
+            {
+              "id": "a1ae775e-0eda-4432-afef-4cb413644d7f",
+              "name": "quiet_start",
+              "type": "string",
+              "value": "20:00"
+            },
+            {
+              "id": "79cbabd1-cf5d-46eb-a19a-3cb9b1721d88",
+              "name": "quiet_end",
+              "type": "string",
+              "value": "08:00"
+            },
+            {
+              "id": "59fb2261-7b48-4da8-be4b-463120cdb4bb",
+              "name": "send_confirmation",
+              "type": "boolean",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7a77a611-8427-42d5-90b3-1f22a69562a8",
+      "name": "Prepare the reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        500
+      ],
+      "parameters": {
+        "jsCode": "// Works out when each text should go, with quiet hours already applied, so every Wait below just waits.\nconst s = $('Your settings').first().json;\nconst b = $('Appointment booked').first().json.body || {};\nconst tz = s.timezone || 'America/New_York';\nconst now = DateTime.now().setZone(tz);\n\nconst digits = String(b.phone || '').replace(/\\D/g, '');\nconst phone = digits.length === 10 ? '+1' + digits : (digits.length === 11 && digits[0] === '1' ? '+' + digits : '');\nconst appt = DateTime.fromISO(String(b.appointment_time || ''), { zone: tz });\nconst name = String(b.customer_name || '').trim();\nconst first = name.split(/\\s+/)[0] || 'there';\nconst service = String(b.service || 'your appointment').trim();\nconst biz = String(s.business_name || 'us').trim();\n\nconst problems = [];\nif (!phone) problems.push('phone \"' + (b.phone || '') + '\" is not a usable US mobile number');\nif (!appt.isValid) problems.push('appointment_time \"' + (b.appointment_time || '') + '\" is not an ISO date and time');\nelse if (appt <= now) problems.push('the appointment time has already passed');\n\n// Quiet hours. The window can wrap past midnight (20:00 to 08:00) or not (13:00 to 14:00).\nconst hm = (v, d) => { const p = String(v || d).split(':').map(Number); return [p[0] || 0, p[1] || 0]; };\nconst [qsH, qsM] = hm(s.quiet_start, '20:00');\nconst [qeH, qeM] = hm(s.quiet_end, '08:00');\nconst qs = qsH * 60 + qsM, qe = qeH * 60 + qeM;\nconst mins = d => d.hour * 60 + d.minute;\nconst inQuiet = d => qs === qe ? false : (qs > qe ? (mins(d) >= qs || mins(d) < qe) : (mins(d) >= qs && mins(d) < qe));\n// Reminders move earlier, to 30 minutes before quiet hours start, so they still land before the appointment.\nconst earlier = d => {\n  if (!inQuiet(d)) return d;\n  let t = d.set({ hour: qsH, minute: qsM, second: 0, millisecond: 0 }).minus({ minutes: 30 });\n  if (t > d) t = t.minus({ days: 1 });\n  return t;\n};\n// The confirmation moves later, to when quiet hours end.\nconst later = d => {\n  if (!inQuiet(d)) return d;\n  let t = d.set({ hour: qeH, minute: qeM, second: 0, millisecond: 0 });\n  if (t < d) t = t.plus({ days: 1 });\n  return t;\n};\n\nconst h1 = Number(s.reminder_1_hours) > 0 ? Number(s.reminder_1_hours) : 24;\nconst h2 = Number(s.reminder_2_hours) > 0 ? Number(s.reminder_2_hours) : 2;\n// Two reminders squeezed together by quiet hours read like spam, so the second one is dropped\n// unless it lands at least an hour after the first (or half the configured gap, if that is shorter).\nconst minGap = Math.min(60, Math.abs(h1 - h2) * 30);\nconst ok = problems.length === 0;\nconst soon = now.plus({ minutes: 5 });\n\nconst confAt = later(now);\nconst sendConf = ok && s.send_confirmation !== false && confAt < appt;\nconst r1 = ok ? earlier(appt.minus({ hours: h1 })) : now;\nconst sendR1 = ok && r1 > soon && (!sendConf || r1 > confAt);\nconst r2 = ok ? earlier(appt.minus({ hours: h2 })) : now;\nconst sendR2 = ok && r2 > soon && r2 < appt && (!sendConf || r2 > confAt) && (!sendR1 || r2.diff(r1, 'minutes').minutes >= minGap);\n\nconst when = at => {\n  const days = appt.startOf('day').diff(at.startOf('day'), 'days').days;\n  const time = appt.toFormat('h:mm a');\n  if (days === 0) return 'today at ' + time;\n  if (days === 1) return 'tomorrow at ' + time;\n  return 'on ' + appt.toFormat('cccc, LLL d') + ' at ' + time;\n};\n\nconst iso = d => d.toUTC().toISO();\nreturn [{ json: {\n  ok, problems: problems.join('; '), phone, name, service,\n  appointment: ok ? appt.toFormat(\"cccc, LLL d 'at' h:mm a\") : '',\n  biz_number: s.business_number, owner_cell: s.owner_cell,\n  confirm_at: iso(sendConf ? confAt : now), send_confirmation: sendConf,\n  confirm_text: ok ? 'Hi ' + first + \", you're booked with \" + biz + ' for ' + service + ' ' + when(confAt) + '. Reply here if you need to change it.' : '',\n  reminder_1_at: iso(sendR1 ? r1 : now), send_reminder_1: sendR1,\n  reminder_1_text: ok ? 'Reminder from ' + biz + ': ' + service + ' ' + when(r1) + '. Reply here if you need to reschedule.' : '',\n  reminder_2_at: iso(sendR2 ? r2 : now), send_reminder_2: sendR2,\n  reminder_2_text: ok ? 'See you soon, ' + first + ': ' + service + ' with ' + biz + ' ' + when(r2) + '.' : '',\n  owner_text: 'Appointment reminders not set for ' + (name || 'a customer') + ': ' + problems.join('; ') + '.',\n} }];\n"
+      }
+    },
+    {
+      "id": "fa2c5d3a-6784-4d1e-a98c-145b104032bb",
+      "name": "Answer the webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        660,
+        500
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: $json.ok, problems: $json.problems, confirm_at: $json.send_confirmation ? $json.confirm_at : null, reminder_1_at: $json.send_reminder_1 ? $json.reminder_1_at : null, reminder_2_at: $json.send_reminder_2 ? $json.reminder_2_at : null } }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "112dd484-f44f-499b-9d6f-bc9798f6cd97",
+      "name": "Usable details?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ef01e0bb-abb3-46da-bf2d-e3c4639b8951",
+              "leftValue": "={{ $('Prepare the reminders').first().json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "2505c3b9-3c45-43ee-9a5c-bf8540d46cf8",
+      "name": "Tell the owner",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        800
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $('Prepare the reminders').first().json.biz_number }}",
+        "to": "={{ $('Prepare the reminders').first().json.owner_cell }}",
+        "message": "={{ $('Prepare the reminders').first().json.owner_text }}",
+        "toWhatsapp": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "94a16760-09ea-4f73-ac9e-2c2190b9e313",
+      "name": "Wait for confirmation time",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        480
+      ],
+      "webhookId": "39377619-6651-467e-8088-4e4229ec0eb7",
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Prepare the reminders').first().json.confirm_at }}"
+      }
+    },
+    {
+      "id": "d2022f1a-62e3-4d04-917f-a83a0bd15818",
+      "name": "Confirmation on?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        480
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "307c4417-078b-47bf-886b-3edcc1f3dfee",
+              "leftValue": "={{ $('Prepare the reminders').first().json.send_confirmation }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "34c78a1b-19a8-4c1e-9c72-2c5c279f1f16",
+      "name": "Send the confirmation",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $('Prepare the reminders').first().json.biz_number }}",
+        "to": "={{ $('Prepare the reminders').first().json.phone }}",
+        "message": "={{ $('Prepare the reminders').first().json.confirm_text }}",
+        "toWhatsapp": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "a539f128-2fb2-4e01-8cf0-b0b700994776",
+      "name": "Wait for reminder 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        480
+      ],
+      "webhookId": "03ce4ccf-245a-4489-ada2-189d9770df36",
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Prepare the reminders').first().json.reminder_1_at }}"
+      }
+    },
+    {
+      "id": "1b5cebc8-9e60-434b-84c1-f95bdd88c042",
+      "name": "Reminder 1 on?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        480
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7aeeb569-0502-4c24-9976-fca5d810fea6",
+              "leftValue": "={{ $('Prepare the reminders').first().json.send_reminder_1 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "0d8988b9-ad64-49cb-bbfa-ef97186a8dab",
+      "name": "Send reminder 1",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $('Prepare the reminders').first().json.biz_number }}",
+        "to": "={{ $('Prepare the reminders').first().json.phone }}",
+        "message": "={{ $('Prepare the reminders').first().json.reminder_1_text }}",
+        "toWhatsapp": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "0a659a28-71fd-4305-b982-e78c2bdba17c",
+      "name": "Wait for reminder 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        480
+      ],
+      "webhookId": "e25a4ddf-6b93-435f-9d22-a5361b6522b7",
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Prepare the reminders').first().json.reminder_2_at }}"
+      }
+    },
+    {
+      "id": "96c03698-2583-4afb-80f0-91b55cba4705",
+      "name": "Reminder 2 on?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        480
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2871de91-b59b-4442-bc7d-5d0b5cbfd70a",
+              "leftValue": "={{ $('Prepare the reminders').first().json.send_reminder_2 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "1710b6c7-0fed-4866-8267-5768a36cf721",
+      "name": "Send reminder 2",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $('Prepare the reminders').first().json.biz_number }}",
+        "to": "={{ $('Prepare the reminders').first().json.phone }}",
+        "message": "={{ $('Prepare the reminders').first().json.reminder_2_text }}",
+        "toWhatsapp": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "440a400e-32d8-4756-af1e-44adc1540434",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        120
+      ],
+      "parameters": {
+        "content": "## Appointment reminders by SMS with quiet hours\nSends a booking confirmation and two reminders by text for each appointment, and never texts a customer during quiet hours. Every send time is worked out the moment the booking arrives, so the rest of the workflow just waits.\n\n### How it works\n1. Your booking tool, form or CRM POSTs the appointment to the webhook: customer_name, phone, appointment_time (ISO, like 2026-09-24T14:00) and service.\n2. A Code node checks the phone and the time, then plans three texts: a confirmation now, a reminder 24 hours before and one 2 hours before.\n3. Quiet hours are applied up front. A reminder that would land in quiet hours moves earlier, to 30 minutes before they start, so it still arrives before the appointment. The confirmation moves later, to when quiet hours end.\n4. Reminders that would already be in the past, or would land right on top of another text, are skipped.\n5. If the phone or the time is unusable, you get a text instead and nothing goes to the customer.\n\n### Setup steps\n1. Add a Twilio credential (Account SID and Auth Token) and select it on the four Twilio nodes.\n2. Open **Your settings** and fill in your business name, your Twilio number and your cell in +1XXXXXXXXXX format, your time zone, the reminder hours and quiet hours.\n3. Set the workflow time zone in workflow settings to match.\n4. Activate, then POST a test booking to the production webhook URL. The response shows when each text is planned.",
+        "width": 480,
+        "height": 900,
+        "color": 1
+      }
+    },
+    {
+      "id": "00bff823-b7d7-485c-b20b-01fae353e95f",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        300
+      ],
+      "parameters": {
+        "content": "## 1. Booking in, texts planned\nThe webhook answers right away with the planned send times, or the reason nothing was planned. Times with no offset are read in your time zone.",
+        "width": 1040,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "id": "fda74016-e07e-44be-b0e4-7c79a49c974b",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        300
+      ],
+      "parameters": {
+        "content": "## 2. Confirmation\nGoes out now, or when quiet hours end if the booking arrives at night.",
+        "width": 640,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "id": "ba791e22-ea1f-48c9-acf7-5cf6b2e6624a",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1720,
+        300
+      ],
+      "parameters": {
+        "content": "## 3. Two reminders\nEach Wait resumes at its planned time. A skipped reminder passes straight through. If an appointment moves or is cancelled, stop its waiting run in Executions and send the booking again.",
+        "width": 1260,
+        "height": 340,
+        "color": 7
+      }
+    },
+    {
+      "id": "0d85539f-7c38-4d89-aa4b-86ac00fbfe03",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        660
+      ],
+      "parameters": {
+        "content": "## Details unusable\nYou get a text saying why, and the customer gets nothing.",
+        "width": 320,
+        "height": 320,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Appointment booked": {
+      "main": [
+        [
+          {
+            "node": "Your settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Your settings": {
+      "main": [
+        [
+          {
+            "node": "Prepare the reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare the reminders": {
+      "main": [
+        [
+          {
+            "node": "Answer the webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer the webhook": {
+      "main": [
+        [
+          {
+            "node": "Usable details?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usable details?": {
+      "main": [
+        [
+          {
+            "node": "Wait for confirmation time",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tell the owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for confirmation time": {
+      "main": [
+        [
+          {
+            "node": "Confirmation on?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmation on?": {
+      "main": [
+        [
+          {
+            "node": "Send the confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send the confirmation": {
+      "main": [
+        [
+          {
+            "node": "Wait for reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Reminder 1 on?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminder 1 on?": {
+      "main": [
+        [
+          {
+            "node": "Send reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Wait for reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reminder 2": {
+      "main": [
+        [
+          {
+            "node": "Reminder 2 on?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminder 2 on?": {
+      "main": [
+        [
+          {
+            "node": "Send reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
