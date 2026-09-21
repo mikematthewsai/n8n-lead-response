@@ -357,7 +357,7 @@
       "typeVersion": 1,
       "position": [
         2400,
-        180
+        660
       ],
       "onError": "continueRegularOutput",
       "parameters": {
@@ -528,12 +528,12 @@
       "typeVersion": 1,
       "position": [
         140,
-        -760
+        -440
       ],
       "parameters": {
         "content": "## Ask every finished job for a Google review by text, once\n\n**Who it is for:** service businesses that finish good jobs and never get around to asking for the review. Plumbers, HVAC, roofers, electricians, garage door companies.\n\n**How it works**\n1. When a job is done, POST the customer's phone, name and the job to the webhook. Your field app, a form or a Zap can do it.\n2. A couple of hours later (you choose), the customer gets one friendly text with your Google review link.\n3. It never texts in your quiet hours. An ask that would land at night waits until the morning.\n4. It never asks the same person twice inside 90 days. Before sending, it reads your Twilio message log for any earlier text to them that carried your review link.\n5. You get a text when an ask goes out, when one is skipped, and when one fails, for example because the customer replied STOP to you once.\n\nEveryone gets the same link whatever you think of the job. Sending the link only to happy customers is review gating, and Google does not allow it.\n\nThere is no database to set up. Twilio already keeps the record.\n\n**Setup steps**\n1. Select your Twilio credential on the four Twilio nodes and the three HTTP Request nodes that talk to Twilio.\n2. Fill in **Your settings**: business name, your Twilio number, your cell, time zone, and your Google review link. It will not send anything until the link is real.\n3. Activate the workflow and POST to the production URL of **Job done**.",
         "width": 940,
-        "height": 720,
+        "height": 620,
         "color": 1
       }
     },

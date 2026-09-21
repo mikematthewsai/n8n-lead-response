@@ -18,6 +18,7 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 ![7am owner brief](../docs/images/template-owner-brief.png)
 ![Appointment reminders with quiet hours](../docs/images/template-appointment-reminders.png)
 ![STOP, START and HELP alerts](../docs/images/template-stop-start-help.png)
+![Google review request by SMS](../docs/images/template-review-request.png)
 
 ## Quote chaser, test runs on 2026-09-20
 
