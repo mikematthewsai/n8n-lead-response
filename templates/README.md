@@ -10,6 +10,7 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 | [owner-brief-sms-twilio.json](owner-brief-sms-twilio.json) | Texts the owner a short summary every morning at 7: customer texts in, texts out, anything undelivered, and who is still waiting on a reply, newest first. No database: it reads the Twilio message log directly | 2026-09-20, live, three runs below |
 | [appointment-reminders-sms-quiet-hours.json](appointment-reminders-sms-quiet-hours.json) | Sends a booking confirmation and reminders 24 hours and 2 hours before each appointment, and never texts during quiet hours. Every send time, quiet hours included, is planned the moment the booking arrives, so the waits never have to re-check anything | 2026-09-21, live, four runs plus eleven scheduling cases below |
 | [sms-keywords-stop-start-help.json](sms-keywords-stop-start-help.json) | Sits on the Twilio number's incoming-text webhook. Answers Twilio with an empty reply so the customer only sees Twilio's own opt-out responses, then texts the owner when someone texts STOP, START or HELP, forwards everyday texts if wanted, and POSTs opt-outs and opt-ins to a CRM webhook | 2026-09-21, six simulated inbound texts and twelve sorting cases below |
+| [google-review-request-sms.json](google-review-request-sms.json) | Texts each customer your Google review link a set time after the job is done (two hours by default), never in quiet hours and never twice inside 90 days. No database: before sending it reads the Twilio message log for an earlier text to that customer carrying your link, and ignores failed sends. Everyone gets the same link, so there is no review gating. The owner hears when an ask goes out, is skipped or fails, with Twilio's own reason | 2026-09-21, live, ten runs plus twenty two harness cases below |
 
 ## What they look like
 
@@ -98,3 +99,32 @@ The sorting code also went through twelve cases in a local harness, including lo
 After testing, the settings went back to placeholders, the CRM URL was cleared and the workflow was turned off. The exported file hashes identically to the workflow in n8n, apart from credential references, which are removed.
 
 What is not covered: the incoming texts were simulated rather than sent through a real Twilio number, because the business number's incoming webhook runs the live lead-response system and was not repointed. Twilio's own STOP, START and HELP replies were not observed, and Twilio request signatures are not checked.
+
+## Google review request, test runs on 2026-09-21
+
+Live runs through the production webhook against a real Twilio number, with the owner's own cell standing in as the customer. The delay was set to 0 or 2 minutes so each run finished in minutes.
+
+| Run | Setup | Result |
+| --- | --- | --- |
+| A | Phone number is `555-0123` | Passed. The webhook answered `ok: false` with the reason, and the owner got a text saying why. Nothing went to the customer |
+| B | Review link left as the placeholder | Passed. Refused before waiting, and the owner was told the link is not set |
+| C | Normal job, delay 0 | Passed. It read 89 earlier texts to that number, found no review ask, sent one, and told the owner |
+| D | A second job for the same customer straight after C | Passed. The log check found the ask from C, nothing was sent, and the owner got "already asked in the last 90 days. Last ask: 2026-09-21" |
+| E | The same job posted twice, two seconds apart, delay 2 minutes | Passed. The first waited and sent on time. The second was refused at once as already waiting |
+| F | Posted at 1:56 PM inside a test quiet window of 1 PM to 5 PM | Passed. Held until 5:00:00 PM exactly, then canceled by hand |
+| G | Twilio refuses the number (`1 000 000 0000`) | Found a bug, see below. After the fix the owner got "did not send. Twilio said: Invalid 'To' Phone Number (Twilio error 21211)" |
+| H | The same refused number again | Found a bug, see below. After the fix the failed attempt no longer counted as an ask |
+| I | Owner updates turned off | Passed. The customer got the ask and the owner got nothing |
+| J | A job posted 90 seconds after an ask went out | Passed. Refused as still waiting until two minutes after the send time, then accepted |
+
+Three bugs came out of these runs, all fixed before export:
+
+1. **The memory of waiting asks never cleared.** n8n did not keep a change to workflow static data made after a Wait, so a customer stayed marked as waiting forever. Each entry now expires two minutes after its planned send time, and from then on the Twilio log is the record.
+2. **The failure text told the owner nothing.** n8n's Twilio node replaces Twilio's error with "Bad request - please check your parameters". The customer text now goes through an HTTP request to Twilio's Messages API, so Twilio's own message and code come back, and error 21610 (the customer replied STOP) is written in plain words.
+3. **A failed send counted as an ask.** Twilio logs failed attempts as outbound messages, so a customer whose text never arrived would have been skipped for 90 days. Failed, undelivered and canceled messages are now ignored.
+
+The planning and checking code also went through twenty two cases in a local harness with the clock frozen: quiet hours on both sides of midnight and exactly at the start, a delay of 0, a daytime window, bad numbers, the placeholder link, a missing name and job, the 90 day boundary on both sides, texts without the link, failed sends and the waiting memory expiring.
+
+After testing, every setting went back to its default, the business details to placeholders, and the workflow was turned off. The exported file hashes identically to the workflow in n8n, apart from credential references, which are removed.
+
+What is not covered: a customer who has replied STOP was not tried (the 21610 wording is written but was not triggered), the default two hour delay and an overnight hold were not run end to end (only the planned resume time was checked), and every customer text went to the same handset. If an execution is canceled or crashes while waiting, that customer is treated as waiting until two minutes after its planned send time.
