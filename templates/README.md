@@ -50,7 +50,7 @@ Live runs against the same Twilio number, with the reminder hours shrunk to minu
 | C | Phone number is `123` | Passed. The webhook answered with the reason, the owner got a text saying why, and nothing went to the customer |
 | D | Booked at 11:30 PM inside a live quiet window of 11:00 to 11:45 PM, appointment at 11:58 PM | Passed. The confirmation waited and went out at 11:45:00, the moment quiet hours ended. Reminder 1 fell inside quiet hours, moved earlier, landed in the past and was skipped. Reminder 2 sent at 11:52 |
 
-The first draft of the planning code also went through eleven scheduling cases in a local harness with the clock frozen, using the real defaults (24 and 2 hours, quiet 8 PM to 8 AM):
+The planning code also went through eleven scheduling cases in a local harness with the clock frozen, using the real defaults (24 and 2 hours, quiet 8 PM to 8 AM):
 
 | Booked | Appointment | Planned |
 | --- | --- | --- |
