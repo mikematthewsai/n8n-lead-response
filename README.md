@@ -134,6 +134,10 @@ Two things in here are worth reading before you copy the pattern.
 
 A reply stops the reminders, because the inbound router closes any active cadence for that number. For a reminder that is the right behaviour: the customer is now talking to a person, and a person who just said "see you then" does not need another text.
 
+## Standalone templates
+
+The workflows above are a system and cannot be imported one at a time. [templates/](templates/) holds single workflows that stand alone, written for n8n's public template library. The first is an SMS quote chaser that asks Twilio directly whether the customer has replied, so it needs no database at all.
+
 ## Install
 
 Read [docs/SETUP.md](docs/SETUP.md). It is the runbook from the first real install, written from what happened rather than from a plan, and it budgets an hour, most of it waiting on signups.
