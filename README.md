@@ -2,7 +2,7 @@
 
 [![checks](https://github.com/mikematthewsai/n8n-lead-response/actions/workflows/validate.yml/badge.svg)](https://github.com/mikematthewsai/n8n-lead-response/actions/workflows/validate.yml)
 
-Eleven n8n workflows that make sure a small business never loses a lead to a missed call, and then keeps following up after it.
+Fourteen n8n workflows that make sure a small business never loses a lead to a missed call, and then keeps following up after it.
 
 This is not a demo. It was extracted from a live production install running on n8n Cloud against a real Twilio number, tested on real handsets, and it found a real bug in the process. Credentials are stripped and identifiers are replaced with placeholders.
 
@@ -69,7 +69,7 @@ flowchart LR
 ```
 
 Every outbound text in the system goes through Core 1, so quiet hours and
-opt-out are enforced in one place rather than eleven. Full detail, including
+opt-out are enforced in one place rather than fourteen. Full detail, including
 what happens when each piece fails, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## The eight workflows
@@ -104,13 +104,27 @@ Morning Brief reads the `reviews` table, which setup creates and which the revie
 
 They were generated rather than extracted from a live install, then run against the real system on 2026-09-20. Quote Chaser passed 9 of 9, Invoice Nudge 18 of 18, Morning Brief 8 of 9 with one cosmetic partial. Two real bugs turned up and both are written up in [docs/TEST-RESULTS.md](docs/TEST-RESULTS.md). Every setting they read has a default, so they run on an existing install without touching the config table.
 
+## The three entry forms
+
+The add ons are webhooks, which is right for a website or a CRM to call but wrong for a person standing in a driveway with a phone. These three are hosted n8n forms that post to those same webhooks, so a quote chase or an invoice reminder can be started from a phone with no app, no login and no curl.
+
+| # | Workflow | Nodes | What it is |
+| --- | --- | --- | --- |
+| 12 | Entry: Quote sent (form) | 2 | Phone, name, amount, job, quote link. Starts Quote Chaser |
+| 13 | Entry: Invoice sent (form) | 2 | Adds invoice number, link and due date. Starts Invoice Nudge |
+| 14 | Entry: Invoice paid (form) | 2 | Stops the reminders and sends the receipt |
+
+Each form's URL is public to anyone who has it, so treat it like a shared password. n8n gives the form a random address, and the form trigger also supports basic auth if you want a login on it.
+
+The quote form was run end to end against the live system on 2026-09-20: form submitted, Quote Chaser started, owner alert delivered, cadence left waiting on the first nudge.
+
 ## Install
 
 Read [docs/SETUP.md](docs/SETUP.md). It is the runbook from the first real install, written from what happened rather than from a plan, and it budgets an hour, most of it waiting on signups.
 
 You need an n8n instance with Data Tables, a Twilio account, and a number that is already A2P registered. A brand new number cannot text until A2P clears, which takes days. That is the single most common thing that delays a launch, so check it first.
 
-`workflows/lead-response-workflows.json` is the importable bundle of all eleven. It is generated from `workflows/individual/` by `scripts/build_bundle.py` and never edited by hand, so the two can never drift apart.
+`workflows/lead-response-workflows.json` is the importable bundle of all fourteen. It is generated from `workflows/individual/` by `scripts/build_bundle.py` and never edited by hand, so the two can never drift apart.
 
 After import, four cross references need repointing. They appear in the bundle as `__WF_ERROR__`, `__WF_SENDSMS__`, `__WF_ALERT__` and `__WF_PIPELINE__`.
 
@@ -118,7 +132,7 @@ Four values need filling in: `__OWNER_CELL__`, `__BUSINESS_NUMBER__`, `__OWNER_E
 
 ## Does it work
 
-[docs/TEST-RESULTS.md](docs/TEST-RESULTS.md) has the log for all eleven. The core eight: 11 of 13 passed on the live system with timestamps, and the two that are not fully verified are written up rather than quietly left out, including exactly which last inch of the press-1 connect is unproven and why. The three add ons: 35 of 36 checks passed, with the one partial and two fixed bugs described in full.
+[docs/TEST-RESULTS.md](docs/TEST-RESULTS.md) has the log for all eleven of the workflows that send. The core eight: 11 of 13 passed on the live system with timestamps, and the two that are not fully verified are written up rather than quietly left out, including exactly which last inch of the press-1 connect is unproven and why. The three add ons: 35 of 36 checks passed, with the one partial and two fixed bugs described in full.
 
 The bug that was found is written up too. The owner alert was being sent from the business number, so an owner who had ever texted STOP to their own line would have silently stopped receiving lead alerts. It failed closed and quiet, which is the worst way for this particular system to fail. Fixed in Core 3 and re-tested.
 

@@ -1,0 +1,91 @@
+{
+  "name": "Entry: Quote sent (form)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Quote sent",
+        "formDescription": "Start the quote follow up. Three nudges, and it stops the moment they reply.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Customer phone",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Customer name",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Amount",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Job",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Quote link",
+              "fieldType": "text",
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f344bf9f-b735-47cd-a5d6-b8954fe3a4a9",
+      "name": "Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -460,
+        300
+      ],
+      "webhookId": "e1d01ad3-46e2-4a93-8542-98c9b88f2845"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://__N8N_HOST__/webhook/quote-sent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({phone: $json[\"Customer phone\"], name: $json[\"Customer name\"], amount: $json[\"Amount\"], job: $json[\"Job\"], quote_url: $json[\"Quote link\"]}) }}",
+        "options": {}
+      },
+      "id": "570f99dd-c801-4a5a-a9f7-4ef582f2d1e2",
+      "name": "Send to workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Form": {
+      "main": [
+        [
+          {
+            "node": "Send to workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}

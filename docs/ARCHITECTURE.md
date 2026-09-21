@@ -1,6 +1,6 @@
 # Architecture
 
-How the eleven workflows fit together, what each one promises the others, and
+How the fourteen workflows fit together, what each one promises the others, and
 what happens when a piece fails.
 
 ## The shape
@@ -31,6 +31,9 @@ allowed to touch Twilio.
   Invoice Nudge    POST /invoice-sent                     Core 1 + Core 3
                    POST /invoice-paid
   Morning Brief    07:00 schedule            -----------> Core 3
+
+  Entry forms      hosted n8n forms, one per action, POST to the three
+                   webhooks above so a person can start one from a phone
 
   Core 0: Error Handler  <---- every workflow above points its error handler here
 ```

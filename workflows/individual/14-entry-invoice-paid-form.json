@@ -1,0 +1,81 @@
+{
+  "name": "Entry: Invoice paid (form)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Invoice paid",
+        "formDescription": "Stop the reminders and send the receipt.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Customer phone",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Customer name",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Amount",
+              "fieldType": "text",
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d6d9d87b-244b-49e3-9900-cf19d1ae5e79",
+      "name": "Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -460,
+        300
+      ],
+      "webhookId": "5b03fc14-60e6-4252-b88c-63a619fb0729"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://__N8N_HOST__/webhook/invoice-paid",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({phone: $json[\"Customer phone\"], name: $json[\"Customer name\"], amount: $json[\"Amount\"]}) }}",
+        "options": {}
+      },
+      "id": "73010019-9789-4fa7-9fc5-cf7b58eaa95a",
+      "name": "Send to workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Form": {
+      "main": [
+        [
+          {
+            "node": "Send to workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}

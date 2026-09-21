@@ -1,0 +1,96 @@
+{
+  "name": "Entry: Invoice sent (form)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Invoice sent",
+        "formDescription": "Start invoice reminders, keyed off the due date.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Customer phone",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Customer name",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Amount",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Invoice number",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Invoice link",
+              "fieldType": "text",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Due date (YYYY-MM-DD)",
+              "fieldType": "text",
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "54051035-bfb5-4895-a968-8e06f7625bd0",
+      "name": "Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -460,
+        300
+      ],
+      "webhookId": "fd4e5736-ad05-4822-be66-a845298b5877"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://__N8N_HOST__/webhook/invoice-sent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({phone: $json[\"Customer phone\"], name: $json[\"Customer name\"], amount: $json[\"Amount\"], invoice_id: $json[\"Invoice number\"], invoice_url: $json[\"Invoice link\"], due_date: $json[\"Due date (YYYY-MM-DD)\"]}) }}",
+        "options": {}
+      },
+      "id": "1961c718-9394-4dbb-b1b3-7e9e2b2ff192",
+      "name": "Send to workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -240,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Form": {
+      "main": [
+        [
+          {
+            "node": "Send to workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}

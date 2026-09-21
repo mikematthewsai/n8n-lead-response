@@ -15,8 +15,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 INDIVIDUAL = ROOT / "workflows" / "individual"
 BUNDLE = ROOT / "workflows" / "lead-response-workflows.json"
 
-VERSION = "1.2"
-BUILT = "2026-09-20"
+VERSION = "1.3"
+BUILT = "2026-09-21"
 
 PLACEHOLDERS = {
     "__WF_ERROR__": "id of the imported 'Core 0: Error Handler'",
