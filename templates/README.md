@@ -11,6 +11,13 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 | [appointment-reminders-sms-quiet-hours.json](appointment-reminders-sms-quiet-hours.json) | Sends a booking confirmation and reminders 24 hours and 2 hours before each appointment, and never texts during quiet hours. Every send time, quiet hours included, is planned the moment the booking arrives, so the waits never have to re-check anything | 2026-09-21, live, four runs plus eleven scheduling cases below |
 | [sms-keywords-stop-start-help.json](sms-keywords-stop-start-help.json) | Sits on the Twilio number's incoming-text webhook. Answers Twilio with an empty reply so the customer only sees Twilio's own opt-out responses, then texts the owner when someone texts STOP, START or HELP, forwards everyday texts if wanted, and POSTs opt-outs and opt-ins to a CRM webhook | 2026-09-21, six simulated inbound texts and twelve sorting cases below |
 
+## What they look like
+
+![SMS quote chaser](../docs/images/template-quote-chaser.png)
+![7am owner brief](../docs/images/template-owner-brief.png)
+![Appointment reminders with quiet hours](../docs/images/template-appointment-reminders.png)
+![STOP, START and HELP alerts](../docs/images/template-stop-start-help.png)
+
 ## Quote chaser, test runs on 2026-09-20
 
 Run against a real Twilio number with the waits set to 0.002 days (about three minutes), then set back to the defaults of 2, 3 and 4 days before export.

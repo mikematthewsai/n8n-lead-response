@@ -6,6 +6,9 @@ Fifteen n8n workflows that make sure a small business never loses a lead to a mi
 
 This is not a demo. It was extracted from a live production install running on n8n Cloud against a real Twilio number, tested on real handsets, and it found a real bug in the process. Credentials are stripped and identifiers are replaced with placeholders.
 
+
+![The inbound SMS router, one of the fifteen workflows](docs/images/inbound-sms-router.png)
+
 ## What it does
 
 A lead arrives, either from a website form or from someone calling and getting no answer.
