@@ -18,6 +18,60 @@ The moment the customer replies, the whole sequence ends. No more automatic text
 
 STOP, START and HELP are handled. Quiet hours are enforced in the business's own time zone, with one deliberate exception: someone who just made contact thirty seconds ago gets the immediate reply regardless of the hour, because that is a reply, not marketing.
 
+## How it fits together
+
+```mermaid
+flowchart LR
+  subgraph entry["Entry points"]
+    A["Lead Response A<br/>POST /lead"]
+    B["Lead Response B<br/>POST /voice-in"]
+    R["Core 2: Inbound SMS Router<br/>POST /sms-in"]
+    Q["Quote Chaser<br/>POST /quote-sent"]
+    I["Invoice Nudge<br/>POST /invoice-sent<br/>POST /invoice-paid"]
+    M["Morning Brief<br/>07:00 schedule"]
+  end
+
+  subgraph spine["Spine"]
+    P["Lead Pipeline<br/>dedupe, immediate reply,<br/>owner call, cadence 10m 50m 9am"]
+  end
+
+  subgraph shared["Shared services"]
+    S1["Core 1: Send SMS<br/>quiet hours, opt-out,<br/>STOP footer, logging"]
+    S3["Core 3: Owner Alert<br/>text, email fallback"]
+  end
+
+  T(["Twilio"])
+  D[("Data tables<br/>contacts, messages,<br/>cadences, config, reviews")]
+  E["Core 0: Error Handler"]
+
+  A --> P
+  B --> P
+  R -->|"reply stops every active cadence"| P
+  P --> S1
+  P --> S3
+  Q --> S1
+  Q --> S3
+  I --> S1
+  I --> S3
+  M --> S3
+  S1 --> T
+  S3 --> T
+  P <--> D
+  R <--> D
+  Q <--> D
+  I <--> D
+  M --> D
+  P -.-> E
+  R -.-> E
+  Q -.-> E
+  I -.-> E
+  M -.-> E
+```
+
+Every outbound text in the system goes through Core 1, so quiet hours and
+opt-out are enforced in one place rather than eleven. Full detail, including
+what happens when each piece fails, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## The eight workflows
 
 Import in this order. Each one refers to the ones before it.
