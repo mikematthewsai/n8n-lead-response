@@ -1,0 +1,393 @@
+{
+  "name": "Template: 7am owner brief from the Twilio message log",
+  "nodes": [
+    {
+      "id": "a9a335a5-4382-45b5-a5d3-ab97e090cab2",
+      "name": "Every morning",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        500
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "587f2404-417d-4c66-bbc4-e80af1dc3492",
+      "name": "Your settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        500
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "43715e32-8eba-4973-be83-0b9e3fea4330",
+              "name": "business_number",
+              "type": "string",
+              "value": "+15555550100"
+            },
+            {
+              "id": "d48ac3e3-19cb-4418-b96c-f163d566bb27",
+              "name": "owner_cell",
+              "type": "string",
+              "value": "+15555550199"
+            },
+            {
+              "id": "a2c27ff4-34b1-4628-a3fc-e0f3c51082c1",
+              "name": "timezone",
+              "type": "string",
+              "value": "America/New_York"
+            },
+            {
+              "id": "07c3de66-1518-46fb-8add-1f1a58f8f386",
+              "name": "lookback_hours",
+              "type": "number",
+              "value": 24
+            },
+            {
+              "id": "830a2d5d-73f6-4eed-910f-aa0b9984e7ad",
+              "name": "max_waiting_listed",
+              "type": "number",
+              "value": 5
+            },
+            {
+              "id": "5378ec81-3c84-44d6-968e-e08c57fe1a54",
+              "name": "skip_if_quiet",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1ff36700-c393-437c-a6a1-c9acd2214b00",
+      "name": "Find your Twilio account",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        500
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.twilio.com/2010-04-01/Accounts.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "twilioApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "Status",
+              "value": "active"
+            },
+            {
+              "name": "PageSize",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c905f06e-7acf-4a84-bd31-554501feffcb",
+      "name": "Texts to your number",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        500
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{ $('Find your Twilio account').first().json.accounts[0].sid }}/Messages.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "twilioApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "To",
+              "value": "={{ $('Your settings').first().json.business_number }}"
+            },
+            {
+              "name": "DateSent>",
+              "value": "={{ $now.toUTC().minus({ days: 8 }).toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "PageSize",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "e9301c4d-98ee-4e54-a3e0-0950981b4f1b",
+      "name": "Texts from your number",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        500
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.twilio.com/2010-04-01/Accounts/{{ $('Find your Twilio account').first().json.accounts[0].sid }}/Messages.json",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "twilioApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "={{ $('Your settings').first().json.business_number }}"
+            },
+            {
+              "name": "DateSent>",
+              "value": "={{ $now.toUTC().minus({ days: 8 }).toFormat('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "PageSize",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "475b3881-037a-46ad-8473-de1a8636cfef",
+      "name": "Build the brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        500
+      ],
+      "parameters": {
+        "jsCode": "// Turns yesterday's Twilio message log into one short text for the owner.\nconst s = $('Your settings').first().json;\nconst biz = String(s.business_number || '').trim();\nconst owner = String(s.owner_cell || '').trim();\nconst tz = s.timezone || 'America/New_York';\nconst hours = Number(s.lookback_hours) > 0 ? Number(s.lookback_hours) : 24;\nconst maxList = Number(s.max_waiting_listed) > 0 ? Number(s.max_waiting_listed) : 5;\nconst now = DateTime.now().setZone(tz);\nconst since = now.minus({ hours });\n\nconst all = [\n  ...($('Texts to your number').first().json.messages || []),\n  ...($('Texts from your number').first().json.messages || []),\n];\n// Twilio can return the same message in both lists if you text yourself. De-duplicate by sid.\nconst seen = new Set();\nconst msgs = all.filter(m => m && m.sid && !seen.has(m.sid) && seen.add(m.sid))\n  .map(m => ({ ...m, at: DateTime.fromRFC2822(m.date_sent || m.date_created || '', { zone: 'utc' }) }))\n  .filter(m => m.at.isValid);\n\nconst isIn = m => String(m.direction || '').startsWith('inbound');\nconst other = m => isIn(m) ? m.from : m.to;\nconst inWindow = msgs.filter(m => m.at >= since);\n\n// Customer traffic only: your own cell texting the business number is left out.\nconst inbound = inWindow.filter(m => isIn(m) && m.from !== owner && m.from !== biz);\nconst outbound = inWindow.filter(m => !isIn(m) && m.to !== owner);\nconst people = new Set(inbound.map(m => m.from));\nconst failed = outbound.filter(m => ['failed', 'undelivered'].includes(m.status));\n\n// Waiting on you: the last message in the conversation came from the customer.\n// Looked at across everything fetched, not only the window, so an old unanswered text still shows.\nconst last = new Map();\nfor (const m of msgs) {\n  const n = other(m);\n  if (!n || n === owner || n === biz) continue;\n  if (!last.has(n) || m.at > last.get(n).at) last.set(n, m);\n}\nconst pretty = n => String(n).replace(/^\\+1(\\d{3})(\\d{3})(\\d{4})$/, '($1) $2-$3');\nconst waiting = [...last.values()]\n  .filter(m => isIn(m) && !/^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(m.body || ''))\n  .sort((a, b) => b.at - a.at);\n\nconst lines = [];\nif (inbound.length) lines.push(inbound.length + ' texts in from ' + people.size + (people.size === 1 ? ' number' : ' numbers') + '.');\nif (outbound.length) lines.push(outbound.length + ' sent.');\nif (failed.length) lines.push(failed.length + ' did not deliver, worth a look in Twilio.');\nif (waiting.length) {\n  const shown = waiting.slice(0, maxList).map(m => pretty(m.from) + ' (' + m.at.setZone(tz).toFormat('ccc h:mm a') + ')');\n  lines.push('Waiting on you, newest first: ' + shown.join(', ') + (waiting.length > maxList ? ', plus ' + (waiting.length - maxList) + ' more.' : '.'));\n}\n\n// Quiet means no customer traffic. Texts between your own cell and the business number do not count.\nconst quiet = inbound.length === 0 && outbound.length === 0;\nconst greeting = 'Morning. Last ' + hours + ' hours on ' + pretty(biz) + ': ';\nconst text = quiet\n  ? greeting + 'quiet, nothing came in or went out.' + (waiting.length ? ' Still waiting on you: ' + waiting.slice(0, maxList).map(m => pretty(m.from)).join(', ') + '.' : '')\n  : greeting + lines.join(' ');\n\nreturn [{ json: { text, quiet, waiting: waiting.length, inbound: inbound.length, outbound: outbound.length, failed: failed.length, owner, biz } }];"
+      }
+    },
+    {
+      "id": "370b5efd-ff7f-45fd-93c3-a340795352f8",
+      "name": "Worth sending?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9aaccd9d-841b-4d05-8a5d-9c6be2b4f0d3",
+              "leftValue": "={{ !($json.quiet && $('Your settings').first().json.skip_if_quiet === true) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "aa90fe8f-cd94-4126-8ddf-5a924d71b4f8",
+      "name": "Text the brief",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        480
+      ],
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $json.biz }}",
+        "to": "={{ $json.owner }}",
+        "message": "={{ $json.text }}",
+        "toWhatsapp": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "60c0d5a4-5283-4aa7-86a4-f0fc4736b3d0",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        160
+      ],
+      "parameters": {
+        "content": "## 7am owner brief from your Twilio message log\nEvery morning this reads the texts on your business number straight from Twilio and sends you one short summary: how many customers texted in, how many texts went out, anything that failed to deliver, and who is still waiting on a reply.\n\n### How it works\n1. A schedule runs at 7am in your time zone.\n2. It looks up your Twilio account and pulls the last 8 days of texts to and from your business number.\n3. A Code node counts customer texts in the lookback window, flags undelivered messages and lists conversations where the customer sent the last text.\n4. Your own cell and STOP replies are left out, so the numbers reflect real customers.\n5. The brief is texted to your cell. On a quiet day you can skip it.\n\n### Setup steps\n1. Add a Twilio credential (Account SID and Auth Token) and select it on the three HTTP Request nodes and the Twilio node.\n2. Open **Your settings** and fill in business_number and owner_cell in +1XXXXXXXXXX format, plus your time zone.\n3. Set the workflow time zone in workflow settings so 7am is your 7am.\n4. Run it once with Execute workflow, check the text on your phone, then activate it.",
+        "width": 460,
+        "height": 760,
+        "color": 1
+      }
+    },
+    {
+      "id": "1ae1ae92-5cec-4cfa-917c-712ca8bb4900",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        300
+      ],
+      "parameters": {
+        "content": "## 1. Schedule and settings\nRuns at 7am. **Your settings** holds your two numbers, your time zone, lookback_hours (default 24), max_waiting_listed (default 5) and skip_if_quiet.",
+        "width": 440,
+        "height": 400,
+        "color": 7
+      }
+    },
+    {
+      "id": "b56ca406-a817-4c5f-8ae4-04eb10380b54",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "content": "## 2. Read the Twilio log\nFinds your Account SID, then pulls texts to and from your business number for the last 8 days. The wider pull is what lets an old unanswered text still show up as waiting.",
+        "width": 700,
+        "height": 400,
+        "color": 7
+      }
+    },
+    {
+      "id": "1ad80be8-2162-4625-a8dc-7f462621bde7",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1260,
+        300
+      ],
+      "parameters": {
+        "content": "## 3. Build and send the brief\nCounts customer traffic only, lists who is waiting newest first and texts you the brief. With skip_if_quiet on, a quiet day sends nothing.",
+        "width": 780,
+        "height": 400,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Every morning": {
+      "main": [
+        [
+          {
+            "node": "Your settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Your settings": {
+      "main": [
+        [
+          {
+            "node": "Find your Twilio account",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find your Twilio account": {
+      "main": [
+        [
+          {
+            "node": "Texts to your number",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texts to your number": {
+      "main": [
+        [
+          {
+            "node": "Texts from your number",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texts from your number": {
+      "main": [
+        [
+          {
+            "node": "Build the brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build the brief": {
+      "main": [
+        [
+          {
+            "node": "Worth sending?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Worth sending?": {
+      "main": [
+        [
+          {
+            "node": "Text the brief",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
