@@ -1,0 +1,2 @@
+workflows/** linguist-language=JSON
+workflows/** linguist-detectable=true
