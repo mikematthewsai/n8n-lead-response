@@ -2,7 +2,7 @@
 
 [![checks](https://github.com/mikematthewsai/n8n-lead-response/actions/workflows/validate.yml/badge.svg)](https://github.com/mikematthewsai/n8n-lead-response/actions/workflows/validate.yml)
 
-Fourteen n8n workflows that make sure a small business never loses a lead to a missed call, and then keeps following up after it.
+Fifteen n8n workflows that make sure a small business never loses a lead to a missed call, and then keeps following up after it.
 
 This is not a demo. It was extracted from a live production install running on n8n Cloud against a real Twilio number, tested on real handsets, and it found a real bug in the process. Credentials are stripped and identifiers are replaced with placeholders.
 
@@ -69,7 +69,7 @@ flowchart LR
 ```
 
 Every outbound text in the system goes through Core 1, so quiet hours and
-opt-out are enforced in one place rather than fourteen. Full detail, including
+opt-out are enforced in one place rather than fifteen. Full detail, including
 what happens when each piece fails, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## The eight workflows
@@ -118,13 +118,29 @@ Each form's URL is public to anyone who has it, so treat it like a shared passwo
 
 The quote form was run end to end against the live system on 2026-09-20: form submitted, Quote Chaser started, owner alert delivered, cadence left waiting on the first nudge.
 
+## Appointment reminders
+
+| # | Workflow | Nodes | What it is |
+| --- | --- | --- | --- |
+| 15 | Appointment Reminder | 24 | A booking goes in, the customer gets a reminder the day before and again shortly before, and the owner hears about the booking straight away |
+
+Post a booking to `/appointment-booked` with a phone, a name and a `when`, either ISO or `YYYY-MM-DD HH:mm` in the business time zone. Anything it cannot parse is rejected rather than guessed at, because a reminder at the wrong hour is worse than no reminder.
+
+Two things in here are worth reading before you copy the pattern.
+
+**Quiet hours are resolved before the send, not by the send.** Every other outbound text in this pack defers to the morning if it lands inside quiet hours, which is correct for a nudge and wrong for a reminder: a reminder deferred to 8am can arrive after the appointment it was reminding about. So this workflow moves a reminder that falls inside quiet hours to the moment quiet hours end, and drops it if that is not before the appointment. It then tells the send path not to defer it again.
+
+**A reminder that cannot be useful is not sent.** Book something three hours out and the day before reminder has nowhere to go, so it does not fire. Two reminders that would land within five minutes of each other are treated as one.
+
+A reply stops the reminders, because the inbound router closes any active cadence for that number. For a reminder that is the right behaviour: the customer is now talking to a person, and a person who just said "see you then" does not need another text.
+
 ## Install
 
 Read [docs/SETUP.md](docs/SETUP.md). It is the runbook from the first real install, written from what happened rather than from a plan, and it budgets an hour, most of it waiting on signups.
 
 You need an n8n instance with Data Tables, a Twilio account, and a number that is already A2P registered. A brand new number cannot text until A2P clears, which takes days. That is the single most common thing that delays a launch, so check it first.
 
-`workflows/lead-response-workflows.json` is the importable bundle of all fourteen. It is generated from `workflows/individual/` by `scripts/build_bundle.py` and never edited by hand, so the two can never drift apart.
+`workflows/lead-response-workflows.json` is the importable bundle of all fifteen. It is generated from `workflows/individual/` by `scripts/build_bundle.py` and never edited by hand, so the two can never drift apart.
 
 After import, four cross references need repointing. They appear in the bundle as `__WF_ERROR__`, `__WF_SENDSMS__`, `__WF_ALERT__` and `__WF_PIPELINE__`.
 

@@ -1,0 +1,1710 @@
+{
+  "name": "Appointment Reminder",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "appointment-booked",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "3b8cf614-7709-456a-a1b8-6df72e86d7e3",
+      "name": "Appointment booked",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -460,
+        300
+      ],
+      "webhookId": "a18a9c9f-2df8-455a-b98f-27a91a3ba0cf"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "config"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "id": "5f846333-e05a-4aed-bc55-de1b1bee67a9",
+      "name": "Load config",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -260,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst cfg = $('Load config').first().json || {};\nconst b = $('Appointment booked').first().json.body || {};\n\nconst digits = String(b.phone || '').replace(/[^0-9]/g, '');\nlet phone = '';\nif (digits.length === 10) phone = '+1' + digits;\nelse if (digits.length === 11 && digits.startsWith('1')) phone = '+' + digits;\nelse if (digits.length > 11) phone = '+' + digits;\nconst pretty = phone ? phone.replace(/^\\+1(\\d{3})(\\d{3})(\\d{4})$/, '($1) $2-$3') : '';\n\nconst name = String(b.name || '').trim();\nconst who = name || pretty || 'there';\nconst job = String(b.job || 'your appointment').trim();\nconst address = String(b.address || '').trim();\nconst biz = cfg.business_name || 'us';\nconst owner = cfg.owner_name || 'the owner';\nconst tz = cfg.timezone || 'America/New_York';\nconst now = DateTime.now().setZone(tz);\n\n// Hours before the appointment, config driven. Read explicitly so a configured 0 survives.\nconst num = (v, dflt) => {\n  if (v === null || v === undefined || String(v).trim() === '') return dflt;\n  const n = Number(v);\n  return Number.isFinite(n) && n >= 0 ? n : dflt;\n};\nconst h1 = num(cfg.appt_reminder_1_hours, 24);\nconst h2 = num(cfg.appt_reminder_2_hours, 2);\n\n// The time arrives as ISO or 'YYYY-MM-DD HH:mm'. Anything else is rejected rather than\n// guessed at, because a reminder sent at the wrong hour is worse than no reminder.\nconst raw = String(b.when || b.appointment_at || '').trim();\nlet appt = raw ? DateTime.fromISO(raw, { zone: tz }) : null;\nif (appt && !appt.isValid) appt = DateTime.fromFormat(raw, 'yyyy-MM-dd HH:mm', { zone: tz });\nif (appt && !appt.isValid) appt = DateTime.fromFormat(raw, 'yyyy-MM-dd h:mm a', { zone: tz });\nconst hasWhen = !!(appt && appt.isValid);\nconst inFuture = hasWhen && appt > now;\n\nconst whenWords = hasWhen ? appt.toFormat(\"cccc d LLLL 'at' h:mm a\") : 'your appointment';\nconst dayWords = hasWhen ? appt.toFormat('cccc') : 'that day';\nconst timeWords = hasWhen ? appt.toFormat('h:mm a') : '';\n\n// Quiet hours are resolved here rather than left to the send path. The send path defers a\n// quiet hours message to the morning, and a reminder deferred to the morning can land after\n// the appointment it was reminding about. So a reminder inside quiet hours is moved to the\n// moment quiet hours end, and dropped if that is not before the appointment.\nconst hhmm = (s, dflt) => {\n  const m = String(s || dflt).match(/^(\\d{1,2}):(\\d{2})$/);\n  return m ? { h: Number(m[1]), m: Number(m[2]) } : { h: Number(dflt.split(':')[0]), m: 0 };\n};\nconst qs = hhmm(cfg.quiet_start, '20:00');\nconst qe = hhmm(cfg.quiet_end, '08:00');\nconst qsM = qs.h * 60 + qs.m, qeM = qe.h * 60 + qe.m;\nconst minutesOf = (d) => d.hour * 60 + d.minute;\nconst inQuiet = (d) => {\n  const t = minutesOf(d);\n  return qsM <= qeM ? (t >= qsM && t < qeM) : (t >= qsM || t < qeM);\n};\nconst nextQuietEnd = (d) => {\n  let e = d.set({ hour: qe.h, minute: qe.m, second: 0, millisecond: 0 });\n  if (e <= d) e = e.plus({ days: 1 });\n  return e;\n};\nconst usable = (t) => {\n  if (!t) return null;\n  let when = t < now ? now : t;\n  if (inQuiet(when)) when = nextQuietEnd(when);\n  if (!appt || when >= appt) return null;\n  if (when <= now.plus({ minutes: 1 })) return null;\n  return when;\n};\n\nconst t1 = usable(hasWhen ? appt.minus({ hours: h1 }) : null);\nconst t2 = usable(hasWhen ? appt.minus({ hours: h2 }) : null);\n// Two reminders that would land within five minutes of each other are one reminder.\nconst same = !!(t1 && t2 && Math.abs(t1.diff(t2, 'minutes').minutes) < 5);\nconst send1 = !!(inFuture && t1);\nconst send2 = !!(inFuture && t2 && !same);\n\nconst fill = (t, dflt) => String(t || dflt)\n  .replace(/\\{name\\}/g, who).replace(/\\{business\\}/g, biz).replace(/\\{owner\\}/g, owner)\n  .replace(/\\{when\\}/g, whenWords).replace(/\\{day\\}/g, dayWords).replace(/\\{time\\}/g, timeWords)\n  .replace(/\\{job\\}/g, job).replace(/\\{address\\}/g, address).trim();\n\nreturn [{ json: {\n  ok: !!phone && inFuture,\n  phone, pretty, name, job, address,\n  source: 'appointment',\n  when_iso: hasWhen ? appt.toUTC().toISO() : '',\n  when_words: whenWords,\n  send_1: send1,\n  send_2: send2,\n  reminder_1_at: send1 ? t1.toUTC().toISO() : now.plus({ seconds: 5 }).toUTC().toISO(),\n  reminder_2_at: send2 ? t2.toUTC().toISO() : now.plus({ seconds: 10 }).toUTC().toISO(),\n  reminder_1: fill(cfg.appt_reminder_1_text, 'Hi {name}, reminder from {business}: we have you down for {when}. Reply here if that no longer works and we will move it.'),\n  reminder_2: fill(cfg.appt_reminder_2_text, 'Hi {name}, {business} here, we are on for {time} today. Reply here if anything changed.'),\n  owner_text: 'Appointment booked: ' + who + ' ' + pretty + ', ' + whenWords + (address ? ', ' + address : '') + '. Reminders set.'\n} }];\n"
+      },
+      "id": "3077614b-72c2-49c2-a3ba-3b8dd0d0e03d",
+      "name": "Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -60,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a6c858ae-173a-4959-8560-4a6fafb4c9d9",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "feaf0e81-94e2-4299-bb53-4eb5ef77942b",
+      "name": "Usable phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -60,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"ok\": true } }}",
+        "options": {}
+      },
+      "id": "efd62614-2a01-4ba1-9e7a-af0e93f4ecb3",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare').first().json.phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3faa9393-ea90-4586-8e0b-e181d31f50ad",
+      "name": "Find contact",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        340,
+        160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "43fb179e-b069-4cfe-a3d9-bad04ec7423a",
+              "leftValue": "={{ ($json.id !== undefined && $json.id !== null) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "688ceb0f-9ee0-4c56-9429-f2c6683ebdc1",
+      "name": "Known contact?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        540,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $('Prepare').first().json.name || $('Find contact').first().json.name || '' }}",
+            "stage": "booked",
+            "source": "={{ $('Find contact').first().json.source || 'appointment' }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_inbound_at",
+              "displayName": "last_inbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_outbound_at",
+              "displayName": "last_outbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare').first().json.phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "30e75349-c63d-4226-8662-8a3df47f4c77",
+      "name": "Refresh contact",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        740,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "contacts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "name": "={{ $('Prepare').first().json.name }}",
+            "source": "appointment",
+            "consent": "opted_in",
+            "stage": "booked",
+            "notes": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "consent",
+              "displayName": "consent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stage",
+              "displayName": "stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_inbound_at",
+              "displayName": "last_inbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "last_outbound_at",
+              "displayName": "last_outbound_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a9d2fde7-79a8-4f7f-9e59-0a5d0307fd9e",
+      "name": "Create contact",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        740,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "workflow": "appointment_reminder",
+            "step": 0,
+            "status": "active",
+            "execution_id": "={{ $execution.id }}",
+            "started_at": "={{ $now.toUTC().toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "4833022f-620c-4754-851b-20ac439ac605",
+      "name": "Open cadence",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_ALERT__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "appointment_booked",
+            "text": "={{ $('Prepare').first().json.owner_text }}",
+            "urgency": "normal",
+            "phone": "={{ $('Prepare').first().json.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "81e10527-b39c-4e76-aae5-16fc9b51ceb7",
+      "name": "Tell the owner",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1160,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Prepare').first().json.reminder_1_at }}"
+      },
+      "id": "224e9a40-c09f-4aca-b83f-31cb42c2bd59",
+      "name": "Wait for reminder 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1360,
+        160
+      ],
+      "webhookId": "07a1b7f9-e113-4bda-bf09-dc9f793e75f1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            },
+            {
+              "keyName": "workflow",
+              "condition": "eq",
+              "keyValue": "appointment_reminder"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "46aa54c2-1c46-48fe-bff4-0d3aa68e1fa5",
+      "name": "Cadence state 1",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "313f4449-7fe4-44a8-95a1-2f75eb6f7ef6",
+              "leftValue": "={{ ($json.status === 'active') && ($('Prepare').first().json.send_1 === true) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "b140eebd-8a13-4db3-abd5-8cbae4ce45a6",
+      "name": "Still active 1?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1760,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_SENDSMS__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "body": "={{ $('Prepare').first().json.reminder_1 }}",
+            "kind": "appt_reminder_1",
+            "skip_quiet_hours": "true"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "skip_quiet_hours",
+              "displayName": "skip_quiet_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "69fbac05-77ab-428d-96d6-d788d4a2539b",
+      "name": "Reminder 1",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1960,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "step": 1
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d77ab159-f87d-4326-8f6a-115791f058bb",
+      "name": "Step 1",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2160,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $('Prepare').first().json.reminder_2_at }}"
+      },
+      "id": "28f4432b-f11f-4a78-bdab-60b80fc1cd5f",
+      "name": "Wait for reminder 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2360,
+        160
+      ],
+      "webhookId": "8ab9eb50-61de-4ff1-a726-00fe6607e354"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            },
+            {
+              "keyName": "workflow",
+              "condition": "eq",
+              "keyValue": "appointment_reminder"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "071fac83-ba4b-423e-a31e-94020955c144",
+      "name": "Cadence state 2",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2560,
+        160
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "96657b0f-0d61-4503-bb22-a4c0681275e4",
+              "leftValue": "={{ ($json.status === 'active') && ($('Prepare').first().json.send_2 === true) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "dd375b4c-68b6-49e9-9ccb-a51e4888bec9",
+      "name": "Still active 2?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2760,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_SENDSMS__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "phone": "={{ $('Prepare').first().json.phone }}",
+            "body": "={{ $('Prepare').first().json.reminder_2 }}",
+            "kind": "appt_reminder_2",
+            "skip_quiet_hours": "true"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "skip_quiet_hours",
+              "displayName": "skip_quiet_hours",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "c503161d-9bce-4d6e-892b-82b8a3e24f43",
+      "name": "Reminder 2",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2960,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "step": 2
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "061ea468-b8e0-4788-81f3-7678d8470b19",
+      "name": "Step 2",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3160,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "finished",
+            "stopped_at": "={{ $now.toUTC().toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "active"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0bb3e0d2-4564-4b1e-a6da-22e5af218458",
+      "name": "Close cadence",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        4360,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "__WF_ALERT__"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event": "appointment_reminders_done",
+            "text": "={{ ($('Prepare').first().json.name || $('Prepare').first().json.pretty) + ' was reminded about ' + $('Prepare').first().json.when_words + ' and did not reply. Nothing to do unless they no show.' }}",
+            "urgency": "normal",
+            "phone": "={{ $('Prepare').first().json.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event",
+              "displayName": "event",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "text",
+              "displayName": "text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "urgency",
+              "displayName": "urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "65b1ab75-394d-4a28-8dac-9aba77ac1e41",
+      "name": "Owner summary",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        4560,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "cadences"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "finished",
+            "stopped_at": "={{ $now.toUTC().toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "step",
+              "displayName": "step",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "execution_id",
+              "displayName": "execution_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "started_at",
+              "displayName": "started_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "stopped_at",
+              "displayName": "stopped_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "execution_id",
+              "condition": "eq",
+              "keyValue": "={{ $execution.id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "active"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1b13db46-0047-4797-846f-025a25816d88",
+      "name": "Tidy cadence",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        4360,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "Appointment booked": {
+      "main": [
+        [
+          {
+            "node": "Load config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load config": {
+      "main": [
+        [
+          {
+            "node": "Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Usable phone?": {
+      "main": [
+        [
+          {
+            "node": "Find contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Find contact": {
+      "main": [
+        [
+          {
+            "node": "Known contact?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Known contact?": {
+      "main": [
+        [
+          {
+            "node": "Refresh contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh contact": {
+      "main": [
+        [
+          {
+            "node": "Open cadence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create contact": {
+      "main": [
+        [
+          {
+            "node": "Open cadence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Open cadence": {
+      "main": [
+        [
+          {
+            "node": "Tell the owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tell the owner": {
+      "main": [
+        [
+          {
+            "node": "Wait for reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Cadence state 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadence state 1": {
+      "main": [
+        [
+          {
+            "node": "Still active 1?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still active 1?": {
+      "main": [
+        [
+          {
+            "node": "Reminder 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tidy cadence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminder 1": {
+      "main": [
+        [
+          {
+            "node": "Step 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1": {
+      "main": [
+        [
+          {
+            "node": "Wait for reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for reminder 2": {
+      "main": [
+        [
+          {
+            "node": "Cadence state 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cadence state 2": {
+      "main": [
+        [
+          {
+            "node": "Still active 2?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Still active 2?": {
+      "main": [
+        [
+          {
+            "node": "Reminder 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tidy cadence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reminder 2": {
+      "main": [
+        [
+          {
+            "node": "Step 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2": {
+      "main": [
+        [
+          {
+            "node": "Close cadence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Close cadence": {
+      "main": [
+        [
+          {
+            "node": "Owner summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond": {
+      "main": [
+        [
+          {
+            "node": "Usable phone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "__WF_ERROR__"
+  },
+  "active": false,
+  "pinData": {}
+}

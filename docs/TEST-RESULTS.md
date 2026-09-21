@@ -143,3 +143,60 @@ The waiting list is not ordered by recency (check 3 above).
 Nothing in the three add ons has been run against a second live handset, so every "customer"
 text above landed on the owner's own phone. The messages are distinguishable by wording and
 every one was confirmed delivered, but a true two-party test has not been done.
+
+---
+
+# Appointment Reminder, run live on 2026-09-20
+
+Built, run against the live system and the owner's own handset the same evening, and
+changed twice because of what the run showed. Config was returned to defaults afterwards.
+
+Test setup: the reminder offsets are config driven, so they were shortened for the sitting
+(`appt_reminder_1_hours` 0.15 and `appt_reminder_2_hours` 0.02, about nine minutes and one
+minute) and the appointment was booked eleven minutes out. Quiet hours were temporarily
+moved from 20:00 to 23:30 for the third run, for the reason below, and restored afterwards.
+
+| # | Check | Result |
+| --- | --- | --- |
+| 1 | `POST /appointment-booked` responds | Passed. `{"ok":true}` immediately, before anything sends |
+| 2 | Owner alert | Passed. "Appointment booked: Reminder Test ... Reminders set." with the time in words |
+| 3 | Contact and cadence rows | Passed. Contact stage `booked`, cadence `appointment_reminder` step 0 status active |
+| 4 | Reminder 1 | Passed on the second run. See the quiet hours finding below |
+| 5 | Reminder 2 | Passed on the third run. See the two findings below |
+| 6 | Cadence closes | Passed on the third run, `finished` at step 2, with the owner summary |
+| 7 | Run completes clean | Passed, execution status success |
+
+## Finding 1: quiet hours made the reminder useless
+
+First run, at 21:26 local. Reminder 1 was written to the messages table as
+`deferred_quiet_hours` and the send path parked it until 08:00 the next morning.
+
+That is correct behaviour for a nudge and wrong for a reminder. A reminder deferred to the
+morning can arrive after the appointment it was reminding about. The send path cannot know
+that, because it does not know there is an appointment.
+
+Fixed in the workflow rather than in the send path. Reminder times are now resolved against
+quiet hours before the wait: a reminder inside quiet hours moves to the moment quiet hours
+end, and is dropped entirely if that is not before the appointment. The send path is then
+told not to defer it again.
+
+## Finding 2: a skipped reminder left the cadence open forever
+
+Second run. The two shortened offsets were less than five minutes apart, so the second
+reminder was correctly suppressed as a duplicate. But the branch that suppresses it ended
+the flow without touching the cadence row, which stayed `active` with no execution left to
+close it.
+
+A cadence stuck open is not harmless. It is what the brief counts as a follow up still
+running, and it is what the inbound router looks for.
+
+Fixed by adding a tidy step that both suppressed branches run into. It closes the row only
+if it is still `active`, so a cadence already stopped by a customer reply keeps
+`stopped_reply` rather than being overwritten with `finished`.
+
+## What is not covered
+
+Both reminders landed on the owner's own handset, so a true two party test has not been
+done. The default offsets of 24 and 2 hours have not been run at full length, only the
+shortened ones. The path where an appointment is booked inside quiet hours for a time
+before quiet hours end, which should drop both reminders, was reasoned through but not run.
