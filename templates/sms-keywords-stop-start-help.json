@@ -1,0 +1,353 @@
+{
+  "name": "Template: STOP, START and HELP texts to the owner and your CRM",
+  "nodes": [
+    {
+      "id": "e65a9223-9b97-49bb-91fb-f0a12fbc73fb",
+      "name": "Text comes in",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        500
+      ],
+      "webhookId": "fcf80d08-f9aa-4805-8396-6715efbdc547",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sms-keywords",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "f48e123e-e59d-4ce6-b163-5dec7b45cec6",
+      "name": "Your settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        500
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bc142203-db1e-4099-9e9c-01bf749dc860",
+              "name": "business_name",
+              "type": "string",
+              "value": "Your business"
+            },
+            {
+              "id": "a2950a60-a66e-425b-904f-351153b87abe",
+              "name": "owner_cell",
+              "type": "string",
+              "value": "+15555550199"
+            },
+            {
+              "id": "e6050515-1dcf-4606-897d-e4d6c4489920",
+              "name": "forward_other_texts",
+              "type": "boolean",
+              "value": true
+            },
+            {
+              "id": "9484256e-f825-4d61-98b1-2b1acd07b6b0",
+              "name": "crm_webhook_url",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "44638e1c-d7d8-4d45-b59b-460fc6433b52",
+      "name": "Read the text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        500
+      ],
+      "parameters": {
+        "jsCode": "// Sorts the incoming text into opted out, opted back in, asked for help, or a normal message,\n// and writes the one line the owner should see.\nconst s = $('Your settings').first().json;\nconst b = $('Text comes in').first().json.body || {};\nconst from = String(b.From || '').trim();\nconst to = String(b.To || '').trim();\nconst text = String(b.Body || '').trim();\nconst owner = String(s.owner_cell || '').trim();\nconst biz = String(s.business_name || 'your business').trim();\nconst media = Number(b.NumMedia) || 0;\n\n// When Advanced Opt-Out handled the keyword, Twilio adds OptOutType (STOP, START or HELP). That is the source of truth.\n// Without it, fall back to Twilio's default keyword lists, matched against the whole message.\nconst twilioType = String(b.OptOutType || '').toUpperCase();\nconst word = text.toUpperCase();\nconst STOP = ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'REVOKE', 'OPTOUT'];\nconst START = ['START', 'UNSTOP'];\nconst HELP = ['HELP'];\nlet kind = 'message';\nif (twilioType === 'STOP' || (!twilioType && STOP.includes(word))) kind = 'opted_out';\nelse if (twilioType === 'START' || (!twilioType && START.includes(word))) kind = 'opted_in';\nelse if (twilioType === 'HELP' || (!twilioType && HELP.includes(word))) kind = 'help';\nconst byTwilio = twilioType !== '';\n\nconst pretty = n => String(n).replace(/^\\+1(\\d{3})(\\d{3})(\\d{4})$/, '($1) $2-$3');\nconst who = pretty(from);\nconst quoted = '\"' + (text.length > 300 ? text.slice(0, 300) + '...' : text) + '\"';\n\nlet ownerText = '';\nif (kind === 'opted_out') ownerText = who + ' texted ' + quoted + ' and opted out of texts from ' + biz + '.' + (byTwilio ? ' Twilio will block any more texts to them from this number.' : ' Take them off your texting lists.');\nif (kind === 'opted_in') ownerText = who + ' texted ' + quoted + ' and can get texts from ' + biz + ' again.';\nif (kind === 'help') ownerText = who + ' texted ' + quoted + ' asking for help.' + (byTwilio ? ' Twilio sent them your standard help reply.' : '') + ' A quick call may be worth it.';\nconst files = media ? media + (media === 1 ? ' photo or file' : ' photos or files') : '';\nif (kind === 'message') ownerText = 'Text from ' + who + ': ' + (text ? quoted + (files ? ' plus ' + files : '') : files || '(empty)');\n\n// Never alert the owner about their own texts, and ignore anything that is not a real inbound text.\nconst isRealText = from !== '' && to !== '';\nconst fromOwner = from === owner || from === to;\nconst tellOwner = isRealText && !fromOwner && owner !== '' && (kind !== 'message' || s.forward_other_texts === true);\nconst crmUrl = String(s.crm_webhook_url || '').trim();\nconst tellCrm = isRealText && !fromOwner && crmUrl !== '' && (kind === 'opted_out' || kind === 'opted_in');\n\nreturn [{ json: {\n  kind, keyword: word, handled_by_twilio: byTwilio, from, business_number: to, owner, owner_text: ownerText,\n  tell_owner: tellOwner, tell_crm: tellCrm, crm_url: crmUrl, message_sid: String(b.MessageSid || ''),\n  received_at: new Date().toISOString(),\n} }];\n"
+      }
+    },
+    {
+      "id": "702bd74f-6e42-44ba-8e9f-39747b09a669",
+      "name": "Answer Twilio",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        660,
+        500
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/xml"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "4cc776f2-45bb-4705-a339-2cab09545137",
+      "name": "Tell the owner?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        920,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3d7368af-e857-4d56-ab49-db60855af7e6",
+              "leftValue": "={{ $('Read the text').first().json.tell_owner }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "4ce0f72f-2c2c-4d7d-927d-4968a149239b",
+      "name": "Text the owner",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        380
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "resource": "sms",
+        "operation": "send",
+        "from": "={{ $('Read the text').first().json.business_number }}",
+        "to": "={{ $('Read the text').first().json.owner }}",
+        "message": "={{ $('Read the text').first().json.owner_text }}",
+        "toWhatsapp": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "f9a6721a-91d0-4848-a9a4-ca71796c11c6",
+      "name": "Update the CRM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        920,
+        720
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a1cf8cd7-64f7-47b3-bb75-ec35f7ec6f07",
+              "leftValue": "={{ $('Read the text').first().json.tell_crm }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "2ed834d6-5ded-4539-a737-c2dc1521f72e",
+      "name": "Send the opt-out to your CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        700
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Read the text').first().json.crm_url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone: $('Read the text').first().json.from, status: $('Read the text').first().json.kind, keyword: $('Read the text').first().json.keyword, handled_by_twilio: $('Read the text').first().json.handled_by_twilio, business_number: $('Read the text').first().json.business_number, message_sid: $('Read the text').first().json.message_sid, received_at: $('Read the text').first().json.received_at }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "4611bbd8-3061-4dad-b0db-2225c73ffcf7",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        80
+      ],
+      "parameters": {
+        "content": "## Tell the owner when a customer texts STOP, START or HELP\nTwilio blocks texts to anyone who replies STOP, but nobody tells the business. This workflow sits on your Twilio number, answers Twilio right away without replying to the customer, and texts you the moment someone opts out, opts back in or asks for help. It can also forward every other text to your cell and send opt-outs to your CRM.\n\n### How it works\n1. Twilio sends each incoming text to the webhook.\n2. A Code node sorts it. If Twilio's Advanced Opt-Out recognised a keyword, it uses Twilio's OptOutType. Otherwise it matches Twilio's default keywords against the whole message.\n3. Twilio gets an empty reply, so the customer only ever sees Twilio's own STOP, START and HELP responses. Nothing is sent twice.\n4. You get one text saying who it was and what happened. Your own texts are ignored.\n5. Opt-outs and opt-ins are POSTed to your CRM or sheet webhook, if you set one.\n\n### Setup steps\n1. Add a Twilio credential (Account SID and Auth Token) and select it on the Twilio node.\n2. Open **Your settings**: business name, your cell in +1XXXXXXXXXX format, whether to forward other texts, and an optional CRM webhook URL.\n3. Activate the workflow and copy the production webhook URL.\n4. In Twilio, open your number, and under Messaging set \"A message comes in\" to that URL with HTTP POST.\n\nA number can only send incoming texts to one URL, so if another tool already handles your inbound texts, put this in front of it or merge the two.",
+        "width": 540,
+        "height": 1000,
+        "color": 1
+      }
+    },
+    {
+      "id": "80cf48c5-eea2-40f2-9c8d-7dc8e22a1828",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        320
+      ],
+      "parameters": {
+        "content": "## 1. Read the text\nTwilio gets an empty TwiML reply within a second, which is all it needs.",
+        "width": 800,
+        "height": 380,
+        "color": 7
+      }
+    },
+    {
+      "id": "fe3c0bf2-8fc2-4af2-bcdd-e58361f8007e",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        840,
+        240
+      ],
+      "parameters": {
+        "content": "## 2. Text the owner\nSkipped for your own texts and, if you turn forwarding off, for everyday messages.",
+        "width": 480,
+        "height": 300,
+        "color": 7
+      }
+    },
+    {
+      "id": "976225ce-3b22-4981-9773-c8f6e2114894",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        840,
+        560
+      ],
+      "parameters": {
+        "content": "## 3. Update your CRM\nOnly for opt-outs and opt-ins, and only when crm_webhook_url is filled in.",
+        "width": 480,
+        "height": 360,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Text comes in": {
+      "main": [
+        [
+          {
+            "node": "Your settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Your settings": {
+      "main": [
+        [
+          {
+            "node": "Read the text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read the text": {
+      "main": [
+        [
+          {
+            "node": "Answer Twilio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Twilio": {
+      "main": [
+        [
+          {
+            "node": "Tell the owner?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update the CRM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tell the owner?": {
+      "main": [
+        [
+          {
+            "node": "Text the owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update the CRM?": {
+      "main": [
+        [
+          {
+            "node": "Send the opt-out to your CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

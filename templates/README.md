@@ -9,6 +9,7 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 | [quote-chaser-sms-twilio.json](quote-chaser-sms-twilio.json) | Chases an unanswered quote with up to three SMS nudges and stops the moment the customer replies. No database: before each nudge it asks Twilio whether the customer has texted the business number since the quote went out | 2026-09-20, live, three runs below |
 | [owner-brief-sms-twilio.json](owner-brief-sms-twilio.json) | Texts the owner a short summary every morning at 7: customer texts in, texts out, anything undelivered, and who is still waiting on a reply, newest first. No database: it reads the Twilio message log directly | 2026-09-20, live, three runs below |
 | [appointment-reminders-sms-quiet-hours.json](appointment-reminders-sms-quiet-hours.json) | Sends a booking confirmation and reminders 24 hours and 2 hours before each appointment, and never texts during quiet hours. Every send time, quiet hours included, is planned the moment the booking arrives, so the waits never have to re-check anything | 2026-09-21, live, four runs plus eleven scheduling cases below |
+| [sms-keywords-stop-start-help.json](sms-keywords-stop-start-help.json) | Sits on the Twilio number's incoming-text webhook. Answers Twilio with an empty reply so the customer only sees Twilio's own opt-out responses, then texts the owner when someone texts STOP, START or HELP, forwards everyday texts if wanted, and POSTs opt-outs and opt-ins to a CRM webhook | 2026-09-21, six simulated inbound texts and twelve sorting cases below |
 
 ## Quote chaser, test runs on 2026-09-20
 
@@ -69,3 +70,24 @@ The planning code also went through eleven scheduling cases in a local harness w
 After testing, every setting went back to its default and the business details to placeholders. The exported file hashes identically to the workflow in n8n, apart from credential references, which are removed.
 
 What is not covered: the full 24 hour wait was not run end to end, a number that has texted STOP was not tried (the Twilio nodes are set to carry on if a send fails), and daylight saving changes between booking and appointment were not tested live. A booking that lands too late for any text to fit before the appointment sends nothing and does not alert the owner.
+
+## STOP, START and HELP handler, test runs on 2026-09-21
+
+The workflow was activated and sent the same form-encoded POST that Twilio sends for an incoming text. The owner alerts went out as real texts through Twilio, and the CRM step posted to a public echo service standing in for a CRM. The customer number was a fictional 555 number.
+
+| Run | Incoming text | Result |
+| --- | --- | --- |
+| A | "STOP" with OptOutType STOP | Passed. Empty TwiML back to Twilio, the owner got "texted "STOP" and opted out ... Twilio will block any more texts to them", and the opt-out reached the CRM endpoint |
+| B | "Start" with OptOutType START | Passed. Owner told they can get texts again, and the opt-in reached the CRM endpoint |
+| C | "help" with OptOutType HELP | Passed. Owner told they asked for help. The CRM endpoint was not called |
+| D | "Can you come Tuesday instead?" with one photo | Passed. Forwarded to the owner with "plus 1 photo or file". The CRM endpoint was not called |
+| E | "STOP" sent from the owner's own cell | Passed. Nothing sent |
+| F | A POST with no From or To | Passed. Nothing sent |
+
+Every response came back as `text/xml` with an empty `<Response>`.
+
+The sorting code also went through twelve cases in a local harness, including lowercase "stop" without OptOutType (treated as an opt-out, and the owner is told to take them off their lists rather than told Twilio blocked them), "Stop." with a full stop and "Please stop by at 3" (both treated as normal texts, because Twilio only matches the whole message), a photo with no words, and forwarding turned off.
+
+After testing, the settings went back to placeholders, the CRM URL was cleared and the workflow was turned off. The exported file hashes identically to the workflow in n8n, apart from credential references, which are removed.
+
+What is not covered: the incoming texts were simulated rather than sent through a real Twilio number, because the business number's incoming webhook runs the live lead-response system and was not repointed. Twilio's own STOP, START and HELP replies were not observed, and Twilio request signatures are not checked.
