@@ -22,3 +22,11 @@ jobs:
 
       - name: Repo claims match the workflow files
         run: python3 scripts/validate.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Watchdog template checks
+        working-directory: templates/tests
+        run: npm install --no-audit --no-fund && node watchdog.test.js
