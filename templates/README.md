@@ -134,6 +134,8 @@ What is not covered: a customer who has replied STOP was not tried (the 21610 wo
 
 ## Website and business line watchdog, test runs on 2026-09-22
 
+This one also has its own repo, with the settings explained, the texts it sends and CI: [n8n-website-line-watchdog-sms](https://github.com/mikematthewsai/n8n-website-line-watchdog-sms).
+
 Live runs on a real n8n Cloud instance, against a real website and a real Twilio number, with the schedule set to every minute and the owner's own cell getting the texts. The number's configuration was only read, never changed.
 
 | Run | Setup | Result |
