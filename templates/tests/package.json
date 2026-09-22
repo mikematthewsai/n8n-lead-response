@@ -1,0 +1,8 @@
+{
+  "name": "template-tests",
+  "private": true,
+  "description": "Checks for the standalone templates. Run: npm install && node watchdog.test.js",
+  "dependencies": {
+    "luxon": "^3.5.0"
+  }
+}

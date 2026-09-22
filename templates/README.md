@@ -11,6 +11,7 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 | [appointment-reminders-sms-quiet-hours.json](appointment-reminders-sms-quiet-hours.json) | Sends a booking confirmation and reminders 24 hours and 2 hours before each appointment, and never texts during quiet hours. Every send time, quiet hours included, is planned the moment the booking arrives, so the waits never have to re-check anything | 2026-09-21, live, four runs plus eleven scheduling cases below |
 | [sms-keywords-stop-start-help.json](sms-keywords-stop-start-help.json) | Sits on the Twilio number's incoming-text webhook. Answers Twilio with an empty reply so the customer only sees Twilio's own opt-out responses, then texts the owner when someone texts STOP, START or HELP, forwards everyday texts if wanted, and POSTs opt-outs and opt-ins to a CRM webhook | 2026-09-21, six simulated inbound texts and twelve sorting cases below |
 | [google-review-request-sms.json](google-review-request-sms.json) | Texts each customer your Google review link a set time after the job is done (two hours by default), never in quiet hours and never twice inside 90 days. No database: before sending it reads the Twilio message log for an earlier text to that customer carrying your link, and ignores failed sends. Everyone gets the same link, so there is no review gating. The owner hears when an ask goes out, is skipped or fails, with Twilio's own reason | 2026-09-21, live, ten runs plus twenty two harness cases below |
+| [website-and-line-watchdog-sms.json](website-and-line-watchdog-sms.json) | Watches the things that quietly stop leads. Every 5 minutes it checks that your websites load (and still show a piece of text you choose), that your Twilio balance is above a floor, that your number still sends calls and texts where it did, and that carriers are not blocking your texts. The owner gets one text when something breaks, a reminder every 4 hours while it stays broken, and one when it recovers. Quiet hours hold everything except routing changes for a morning check-in. No database: it remembers what it already said in the workflow's own static data | 2026-09-22, live, ten runs plus 63 automated checks below |
 
 ## What they look like
 
@@ -19,6 +20,7 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 ![Appointment reminders with quiet hours](../docs/images/template-appointment-reminders.png)
 ![STOP, START and HELP alerts](../docs/images/template-stop-start-help.png)
 ![Google review request by SMS](../docs/images/template-review-request.png)
+![Website and business line watchdog](../docs/images/template-watchdog.png)
 
 ## Quote chaser, test runs on 2026-09-20
 
@@ -129,3 +131,27 @@ The planning and checking code also went through twenty two cases in a local har
 After testing, every setting went back to its default, the business details to placeholders, and the workflow was turned off. The exported file hashes identically to the workflow in n8n, apart from credential references, which are removed.
 
 What is not covered: a customer who has replied STOP was not tried (the 21610 wording is written but was not triggered), the default two hour delay and an overnight hold were not run end to end (only the planned resume time was checked), and every customer text went to the same handset. If an execution is canceled or crashes while waiting, that customer is treated as waiting until two minutes after its planned send time.
+
+## Website and business line watchdog, test runs on 2026-09-22
+
+Live runs on a real n8n Cloud instance, against a real website and a real Twilio number, with the schedule set to every minute and the owner's own cell getting the texts. The number's configuration was only read, never changed.
+
+| Run | Setup | Result |
+| --- | --- | --- |
+| A | First check, with the real site plus a page that does not exist | Passed. One text saying what it watches and where things stand: site up, test page 404, the balance, where calls go, 0 texts blocked. Twilio shows it delivered |
+| B | Second check | Passed. "watchdog-test-404 is down: the server answered 404, page not found" |
+| C | Required text changed to one that is not on the page, balance floor raised above the balance | Passed. The balance alert went out at once, and "the page loads but ... is missing from it" on the next check |
+| D | Required text and floor put back | Passed. One text with two lines: back up after 2 min, balance back up |
+| E | Owner cell changed to a number Twilio refuses | Passed. Twilio answered 21211 and the text was kept |
+| F | Owner cell put back | Passed. The kept text went out on the next check, together with the new one |
+| G | Quiet hours set around the current time, test page added back | Passed. Nothing was sent. The down alert was held for the morning check-in |
+
+One finding from these runs changed the template. On n8n 2.x, editing the settings of a published workflow does not reach the running copy until it is published again, so a run straight after an edit still used the old settings. The testing note on the canvas now says so.
+
+The same file also ran in a local n8n 2.40.5 against a mock Twilio API and a mock website, 29 runs, covering what should not be done to a live number: calls moved to a Studio flow (old and new destination, SIDs shortened, query strings dropped), the number disappearing from the account, the Twilio lookup failing (skipped, not reported as missing), three carrier blocks in the hour next to a block to the owner and one older than the window (only the three counted), a site that never answers (the real 15 second timeout), no websites at all, and the example numbers left in (it stops and says why).
+
+[tests/watchdog.test.js](tests/watchdog.test.js) runs the Code node source straight out of this file with the clock frozen: 63 checks, including the morning check-in, reminders, the 24 hour limit on retries, certificate and DNS failures, and that the file ships with no credentials and the example numbers. CI runs it on every push.
+
+After testing, the settings went back to the example numbers and defaults, the schedule to 5 minutes, and the workflow was turned off. The exported file matches the workflow in n8n node for node, apart from credential references, which are removed.
+
+What is not covered: the morning check-in was not seen live, because it needs a new day and n8n does not let static data be changed from outside. Routing changes, a missing number and carrier blocking were only simulated. Runs A to C ran before a formatting fix that put the comma in $1,000.00; D to G ran the final code.
