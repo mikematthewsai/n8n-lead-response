@@ -30,3 +30,7 @@ jobs:
       - name: Watchdog template checks
         working-directory: templates/tests
         run: npm install --no-audit --no-fund && node watchdog.test.js
+
+      - name: Renewal reminder template checks
+        working-directory: templates/tests
+        run: node renewals.test.js

@@ -12,6 +12,7 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 | [sms-keywords-stop-start-help.json](sms-keywords-stop-start-help.json) | Sits on the Twilio number's incoming-text webhook. Answers Twilio with an empty reply so the customer only sees Twilio's own opt-out responses, then texts the owner when someone texts STOP, START or HELP, forwards everyday texts if wanted, and POSTs opt-outs and opt-ins to a CRM webhook | 2026-09-21, six simulated inbound texts and twelve sorting cases below |
 | [google-review-request-sms.json](google-review-request-sms.json) | Texts each customer your Google review link a set time after the job is done (two hours by default), never in quiet hours and never twice inside 90 days. No database: before sending it reads the Twilio message log for an earlier text to that customer carrying your link, and ignores failed sends. Everyone gets the same link, so there is no review gating. The owner hears when an ask goes out, is skipped or fails, with Twilio's own reason | 2026-09-21, live, ten runs plus twenty two harness cases below |
 | [website-and-line-watchdog-sms.json](website-and-line-watchdog-sms.json) | Watches the things that quietly stop leads. Every 5 minutes it checks that your websites load (and still show a piece of text you choose), that your Twilio balance is above a floor, that your number still sends calls and texts where it did, and that carriers are not blocking your texts. The owner gets one text when something breaks, a reminder every 4 hours while it stays broken, and one when it recovers. Quiet hours hold everything except routing changes for a morning check-in. No database: it remembers what it already said in the workflow's own static data | 2026-09-22, live, ten runs plus 63 automated checks below |
+| [renewal-reminders-sms.json](renewal-reminders-sms.json) | Texts the owner before the things that keep a service business legal to work run out: licenses, insurance, registrations, bonds. The list lives in the workflow, one line per item. Every morning at 8 it texts anything 60, 30, 14, 7, 3 or 1 days out, due today or overdue, with a Done link on each line: a yearly item rolls to next year, a one-time item stops, and the page the link opens has an Undo. No database: rolled dates and one-time link codes live in the workflow's own static data | 2026-09-22, live, eight runs plus 61 automated checks below |
 
 ## What they look like
 
@@ -21,6 +22,7 @@ These are single workflows that stand alone. Each one needs nothing but its own 
 ![STOP, START and HELP alerts](../docs/images/template-stop-start-help.png)
 ![Google review request by SMS](../docs/images/template-review-request.png)
 ![Website and business line watchdog](../docs/images/template-watchdog.png)
+![License and insurance renewal reminders](../docs/images/template-renewal-reminders.png)
 
 ## Quote chaser, test runs on 2026-09-20
 
@@ -157,3 +159,28 @@ The same file also ran in a local n8n 2.40.5 against a mock Twilio API and a moc
 After testing, the settings went back to the example numbers and defaults, the schedule to 5 minutes, and the workflow was turned off. The exported file matches the workflow in n8n node for node, apart from credential references, which are removed.
 
 What is not covered: the morning check-in was not seen live, because it needs a new day and n8n does not let static data be changed from outside. Routing changes, a missing number and carrier blocking were only simulated. Runs A to C ran before a formatting fix that put the comma in $1,000.00; D to G ran the final code.
+
+## Renewal reminders, test runs on 2026-09-22
+
+This one also has its own repo, with the settings explained, the texts it sends and CI: [n8n-renewal-reminders-sms](https://github.com/mikematthewsai/n8n-renewal-reminders-sms).
+
+Live runs on a real n8n Cloud instance with a real Twilio number texting the owner's own cell. Two test items: a yearly one due in 3 days and a one-time one due the next day. The schedule was set to a single run a few minutes ahead, and the Done links were tapped against the published workflow.
+
+| Run | Setup | Result |
+| --- | --- | --- |
+| A | First scheduled run | Passed. One text: the startup message and both items with a Done link each. Twilio accepted it |
+| B | Done link on the yearly item | Passed. Next due September 25, 2027, first reminder July 27, 2027 |
+| C | Same link again | Passed. "Nothing changed" |
+| D | Undo link from that page | Passed. Back to September 25, 2026 |
+| E | Undo again | Passed. "Nothing changed" |
+| F | Original Done link after the Undo | Passed. Rolled again |
+| G | Done link on the one-time item | Passed. No more reminders for it |
+| H | Second scheduled run the same day, after publishing again | Passed. Nothing sent, and the stored memory survived the republish |
+
+The same file ran in a local n8n 2.40.5 against a mock Twilio API: 32 checks over 16 executions, covering a bad date in the list (named once, with the formats it accepts), the next morning (only what is still on a reminder day), a text Twilio refuses (kept and sent the next morning), a date changed in the list after a Done tap (the list wins), wrong or junk link codes (nothing changes) and the example numbers left in (it stops and says why).
+
+[tests/renewals.test.js](tests/renewals.test.js) runs the Code node source straight out of this file with the clock frozen: 61 checks. CI runs it on every push.
+
+After testing, the settings went back to the example numbers and the schedule to 8 AM, and the workflow was turned off. The Code nodes of the tested copy, a clean import of this file and the file itself hash identically.
+
+What is not covered: delivery to the handset was not read back from Twilio, and a real next morning, a real refusal and the 1st-of-the-month look ahead were only simulated.
